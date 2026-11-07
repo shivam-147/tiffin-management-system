@@ -1,0 +1,29 @@
+meta {
+  name: Resume Subscription Package
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/subscriptions/:id/resume
+  body: json
+  auth: bearer
+}
+
+params:path {
+  id: 672e3a890412a831e5f88415
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "resumeDate": "2026-11-15"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

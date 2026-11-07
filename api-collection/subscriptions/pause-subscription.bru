@@ -1,0 +1,30 @@
+meta {
+  name: Pause Subscription Package
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/subscriptions/:id/pause
+  body: json
+  auth: bearer
+}
+
+params:path {
+  id: 672e3a890412a831e5f88415
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "reason": "Traveling home for vacation",
+    "expectedResumeDate": "2026-11-15"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

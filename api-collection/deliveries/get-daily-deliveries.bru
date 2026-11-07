@@ -1,0 +1,27 @@
+meta {
+  name: Get Daily Deliveries
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/deliveries?page=1&limit=20&date=2026-11-07&status=ALL
+  body: none
+  auth: bearer
+}
+
+params:query {
+  page: 1
+  limit: 20
+  ~date: 2026-11-07
+  ~status: PENDING
+  ~customerId: 672e3a890412a831e5f88412
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+}

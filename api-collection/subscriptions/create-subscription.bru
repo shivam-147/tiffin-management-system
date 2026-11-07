@@ -1,0 +1,28 @@
+meta {
+  name: Create Subscription Package
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/subscriptions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "customerId": "672e3a890412a831e5f88412",
+    "pricePerTiffin": 60,
+    "totalTiffins": 60,
+    "notes": "Monthly meal package - 60 tiffins"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

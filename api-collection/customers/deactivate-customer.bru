@@ -1,0 +1,23 @@
+meta {
+  name: Deactivate Customer
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/customers/:id/deactivate
+  body: none
+  auth: bearer
+}
+
+params:path {
+  id: 672e3a890412a831e5f88412
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+}

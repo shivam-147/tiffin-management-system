@@ -1,0 +1,30 @@
+meta {
+  name: Update Delivery Status
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{base_url}}/deliveries/:id/status
+  body: json
+  auth: bearer
+}
+
+params:path {
+  id: 672e3a890412a831e5f88418
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "status": "DELIVERED",
+    "notes": "Delivered to hostel security guard"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

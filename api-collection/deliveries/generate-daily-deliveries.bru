@@ -1,0 +1,25 @@
+meta {
+  name: Generate Daily Deliveries
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/deliveries/generate
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "date": "2026-11-07"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

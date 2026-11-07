@@ -1,0 +1,19 @@
+meta {
+  name: Get Dashboard Summary
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/dashboard/summary
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+}

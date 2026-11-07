@@ -1,0 +1,26 @@
+meta {
+  name: Get Subscriptions
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/subscriptions?page=1&limit=10&status=ACTIVE
+  body: none
+  auth: bearer
+}
+
+params:query {
+  page: 1
+  limit: 10
+  status: ACTIVE
+  ~customerId: 672e3a890412a831e5f88412
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+}

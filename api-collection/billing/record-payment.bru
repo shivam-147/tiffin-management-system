@@ -1,0 +1,32 @@
+meta {
+  name: Record Payment
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/billing/:id/payments
+  body: json
+  auth: bearer
+}
+
+params:path {
+  id: 672e3a890412a831e5f88420
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "amount": 1500,
+    "paymentMethod": "UPI",
+    "transactionReference": "UPI-REF-9876543210",
+    "notes": "Paid via Google Pay"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

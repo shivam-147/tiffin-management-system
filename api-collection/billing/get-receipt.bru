@@ -1,0 +1,23 @@
+meta {
+  name: Get Bill Receipt
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/billing/:id/receipt
+  body: none
+  auth: bearer
+}
+
+params:path {
+  id: 672e3a890412a831e5f88420
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+}

@@ -1,0 +1,29 @@
+meta {
+  name: Get Bills
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/billing?page=1&limit=10&month=11&year=2026&paymentStatus=ALL
+  body: none
+  auth: bearer
+}
+
+params:query {
+  page: 1
+  limit: 10
+  ~month: 11
+  ~year: 2026
+  ~billingPeriod: 2026-11
+  ~paymentStatus: UNPAID
+  ~customerId: 672e3a890412a831e5f88412
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+}

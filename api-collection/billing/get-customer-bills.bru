@@ -1,0 +1,23 @@
+meta {
+  name: Get Customer Bills
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/billing/customer/:customerId
+  body: none
+  auth: bearer
+}
+
+params:path {
+  customerId: 672e3a890412a831e5f88412
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+}

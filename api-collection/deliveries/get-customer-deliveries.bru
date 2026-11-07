@@ -1,0 +1,28 @@
+meta {
+  name: Get Customer Deliveries
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/deliveries/customer/:customerId?page=1&limit=20
+  body: none
+  auth: bearer
+}
+
+params:path {
+  customerId: 672e3a890412a831e5f88412
+}
+
+params:query {
+  page: 1
+  limit: 20
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+settings {
+  encodeUrl: true
+}

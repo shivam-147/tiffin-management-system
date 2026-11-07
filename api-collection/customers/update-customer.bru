@@ -1,0 +1,32 @@
+meta {
+  name: Update Customer
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{base_url}}/customers/:id
+  body: json
+  auth: bearer
+}
+
+params:path {
+  id: 672e3a890412a831e5f88412
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Rahul Sharma",
+    "phone": "9876543210",
+    "address": "Hostel No 4, Room 105, New Block, Jabalpur",
+    "notes": "Deliver dinner before 8:30 PM"
+  }
+}
+
+settings {
+  encodeUrl: true
+}

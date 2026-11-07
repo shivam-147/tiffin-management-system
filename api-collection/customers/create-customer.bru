@@ -1,0 +1,29 @@
+meta {
+  name: Create Customer
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/customers
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Rahul Sharma",
+    "phone": "9876543210",
+    "address": "Hostel No 4, Room 102, Jabalpur",
+    "email": "rahul@example.com",
+    "notes": "No onions in meal"
+  }
+}
+
+settings {
+  encodeUrl: true
+}
