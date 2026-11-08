@@ -208,6 +208,32 @@ class AuthService {
       id: admin._id.toString(),
       name: admin.name,
       email: admin.email,
+      businessName: (admin as any).businessName || "Tiffin Distribution Services",
+      phone: (admin as any).phone || "",
+      address: (admin as any).address || "",
+      upiId: (admin as any).upiId || "",
+    };
+  }
+
+  async updateProfile(adminId: string, data: Record<string, any>) {
+    const admin = await authRepository.findById(adminId);
+    if (!admin || !admin.isActive) {
+      throw new AppError(
+        "Admin not found",
+        HTTP_STATUS.NOT_FOUND,
+        ERROR_CODES.NOT_FOUND
+      );
+    }
+
+    const updated = await authRepository.updateProfile(adminId, data);
+    return {
+      id: updated!._id.toString(),
+      name: updated!.name,
+      email: updated!.email,
+      businessName: (updated as any).businessName || "Tiffin Distribution Services",
+      phone: (updated as any).phone || "",
+      address: (updated as any).address || "",
+      upiId: (updated as any).upiId || "",
     };
   }
 }

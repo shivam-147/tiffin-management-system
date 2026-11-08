@@ -7,7 +7,8 @@ interface StatCardProps {
   value: string | number;
   subtitle?: string;
   icon: keyof typeof Ionicons.glyphMap;
-  color?: "orange" | "green" | "blue" | "amber" | "rose" | "purple";
+  color?: "orange" | "green" | "blue" | "amber" | "rose" | "purple" | "emerald" | "indigo" | "slate";
+  className?: string;
 }
 
 const colorMap = {
@@ -23,11 +24,23 @@ const colorMap = {
     iconColor: "#16A34A",
     text: "text-emerald-950",
   },
+  emerald: {
+    bg: "bg-emerald-50",
+    iconBg: "bg-emerald-100",
+    iconColor: "#16A34A",
+    text: "text-emerald-950",
+  },
   blue: {
     bg: "bg-blue-50",
     iconBg: "bg-blue-100",
     iconColor: "#2563EB",
     text: "text-blue-950",
+  },
+  indigo: {
+    bg: "bg-indigo-50",
+    iconBg: "bg-indigo-100",
+    iconColor: "#4F46E5",
+    text: "text-indigo-950",
   },
   amber: {
     bg: "bg-amber-50",
@@ -40,6 +53,12 @@ const colorMap = {
     iconBg: "bg-rose-100",
     iconColor: "#E11D48",
     text: "text-rose-950",
+  },
+  slate: {
+    bg: "bg-slate-50",
+    iconBg: "bg-slate-200",
+    iconColor: "#475569",
+    text: "text-slate-950",
   },
   purple: {
     bg: "bg-purple-50",
@@ -55,12 +74,13 @@ export const StatCard: React.FC<StatCardProps> = ({
   subtitle,
   icon,
   color = "orange",
+  className = "",
 }) => {
-  const c = colorMap[color];
+  const c = colorMap[color] || colorMap.orange;
 
   return (
     <View
-      className={`rounded-2xl p-4 flex-1 m-1 border border-slate-100/80 shadow-sm ${c.bg}`}
+      className={`rounded-2xl p-4 flex-1 m-1 border border-slate-100/80 shadow-sm ${c.bg} ${className}`}
     >
       <View className="flex-row items-center justify-between mb-2">
         <View className={`w-9 h-9 rounded-xl items-center justify-center ${c.iconBg}`}>

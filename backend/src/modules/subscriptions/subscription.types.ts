@@ -2,8 +2,13 @@ import { SubscriptionStatus } from "./subscription.model";
 
 export interface CreateSubscriptionInput {
   customerId: string;
+  packageCatalogId?: string;
+  packageName?: string;
   pricePerTiffin: number;
   totalTiffins: number;
+  advancePaid?: number;
+  mealsPerDay?: number;
+  mealTypes?: string[];
   startDate?: string | Date;
   notes?: string;
 }

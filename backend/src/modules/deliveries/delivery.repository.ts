@@ -11,8 +11,12 @@ class DeliveryRepository {
       .populate("subscription", "pricePerTiffin totalTiffins deliveredQuantity remainingQuantity status");
   }
 
-  async findByCustomerAndDate(customerId: string, dateString: string): Promise<IDelivery | null> {
-    return Delivery.findOne({ customer: customerId, dateString });
+  async findByCustomerAndDate(customerId: string, dateString: string, mealType?: string): Promise<IDelivery | null> {
+    const query: Record<string, any> = { customer: customerId, dateString };
+    if (mealType) {
+      query.mealType = mealType;
+    }
+    return Delivery.findOne(query);
   }
 
   async find(
@@ -41,7 +45,7 @@ class DeliveryRepository {
     if (notes !== undefined) {
       updateObj.notes = notes;
     }
-    return Delivery.findByIdAndUpdate(id, updateObj, { new: true })
+    return Delivery.findByIdAndUpdate(id, updateObj, { returnDocument: "after" })
       .populate("customer", "name phone address isActive")
       .populate("subscription", "pricePerTiffin totalTiffins deliveredQuantity remainingQuantity status");
   }

@@ -9,6 +9,14 @@ export const generateDeliveriesSchema = z.object({
   date: dateStringSchema.optional(),
 });
 
+export const addExtraDeliverySchema = z.object({
+  customerId: objectIdSchema,
+  quantity: z.coerce.number().int().positive().max(10).optional().default(1),
+  date: dateStringSchema.optional(),
+  mealType: z.enum(["BREAKFAST", "LUNCH", "DINNER", "EXTRA"]).optional().default("EXTRA"),
+  notes: z.string().trim().max(300).optional(),
+});
+
 export const updateDeliveryStatusSchema = z.object({
   status: z.enum(["PENDING", "DELIVERED", "SKIPPED", "FAILED"]),
   notes: z.string().trim().max(300, "Notes cannot exceed 300 characters").optional(),
@@ -17,6 +25,7 @@ export const updateDeliveryStatusSchema = z.object({
 export const deliveryQuerySchema = z.object({
   date: dateStringSchema.optional(),
   status: z.enum(["PENDING", "DELIVERED", "SKIPPED", "FAILED", "ALL"]).optional(),
+  mealType: z.enum(["BREAKFAST", "LUNCH", "DINNER", "EXTRA", "ALL"]).optional(),
   customerId: objectIdSchema.optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),

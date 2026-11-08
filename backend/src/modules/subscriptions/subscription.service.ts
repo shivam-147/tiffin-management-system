@@ -62,13 +62,28 @@ class SubscriptionService {
     const totalAmount = Math.round(pricePerTiffin * totalTiffins * 100) / 100;
     const startDate = data.startDate ? new Date(data.startDate) : new Date();
 
+    const mealsPerDay = Number(data.mealsPerDay) || 1;
+    const defaultMealTypes =
+      data.mealTypes && data.mealTypes.length > 0
+        ? data.mealTypes
+        : mealsPerDay === 1
+        ? ["LUNCH"]
+        : mealsPerDay === 2
+        ? ["LUNCH", "DINNER"]
+        : ["BREAKFAST", "LUNCH", "DINNER"];
+
     return subscriptionRepository.create({
       customer: customer._id as any,
+      packageCatalog: (data.packageCatalogId as any) || undefined,
+      packageName: data.packageName || "Standard Package",
       pricePerTiffin,
       totalTiffins,
       deliveredQuantity: 0,
       remainingQuantity: totalTiffins,
       totalAmount,
+      advancePaid: Number(data.advancePaid) || 0,
+      mealsPerDay,
+      mealTypes: defaultMealTypes,
       status: "ACTIVE",
       startDate,
       notes: data.notes || undefined,

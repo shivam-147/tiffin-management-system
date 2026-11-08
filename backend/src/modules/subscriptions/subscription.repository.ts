@@ -39,7 +39,7 @@ class SubscriptionRepository {
   }
 
   async update(id: string, updateData: Record<string, any>): Promise<ISubscription | null> {
-    return Subscription.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    return Subscription.findByIdAndUpdate(id, updateData, { returnDocument: "after", runValidators: true });
   }
 }
 

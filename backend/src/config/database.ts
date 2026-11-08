@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
 import { env } from "./env";
+import { logger } from "../utils/logger.util";
 
 class Database {
   async connect(): Promise<void> {
     try {
       await mongoose.connect(env.MONGODB_URI);
 
-      console.log("MongoDB connected successfully");
+      logger.info("MongoDB connected successfully");
     } catch (error) {
-      console.error("MongoDB connection failed:", error);
+      logger.error("MongoDB connection failed:", error);
       throw error;
     }
   }

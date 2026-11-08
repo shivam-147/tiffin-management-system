@@ -65,7 +65,7 @@ backend/
 │   │   ├── deliveries/      # Daily delivery batching & status tracking
 │   │   ├── health/          # Ping & DB health check
 │   │   └── subscriptions/   # Meal package tracking, pause & resume
-│   ├── scripts/             # CLI utilities (e.g., create-admin.ts)
+│   ├── scripts/             # CLI utilities (Ex., create-admin.ts)
 │   ├── types/               # Global TypeScript declarations
 │   ├── utils/               # JWT, password, and response formatting helpers
 │   ├── app.ts               # Express application composition
@@ -96,7 +96,7 @@ When implementing or modifying any feature, respect these invariants:
 - Reversing from `DELIVERED` to `SKIPPED` / `FAILED` / `PENDING`:
   - Increment `remainingQuantity` and decrement `deliveredQuantity`.
   - If package was `COMPLETED`, restore its status to `ACTIVE` and clear `completionDate`.
-- Transitions between non-delivered statuses (e.g. `PENDING` $\leftrightarrow$ `SKIPPED`) perform **no** balance adjustment.
+- Transitions between non-delivered statuses (Ex. `PENDING` $\leftrightarrow$ `SKIPPED`) perform **no** balance adjustment.
 
 ### 3. Idempotency Invariants
 - **Daily Deliveries**: Enforced by a compound unique index `{ customer: 1, dateString: 1 }`. Running daily generation multiple times for the same date must safely skip existing records.

@@ -31,6 +31,24 @@ export interface Admin {
   id: string;
   name: string;
   email: string;
+  businessName?: string;
+  phone?: string;
+  address?: string;
+  upiId?: string;
+}
+
+export interface PackageCatalog {
+  _id: string;
+  name: string;
+  description?: string;
+  totalTiffins: number;
+  pricePerTiffin: number;
+  totalAmount: number;
+  mealsPerDay: 1 | 2 | 3;
+  mealTypes: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface LoginPayload {
@@ -69,11 +87,16 @@ export interface PauseEntry {
 export interface Subscription {
   _id: string;
   customer: Customer;
+  packageCatalog?: PackageCatalog | string;
+  packageName?: string;
   pricePerTiffin: number;
   totalTiffins: number;
   deliveredQuantity: number;
   remainingQuantity: number;
   totalAmount: number;
+  advancePaid?: number;
+  mealsPerDay?: number;
+  mealTypes?: string[];
   status: SubscriptionStatus;
   startDate: string;
   completionDate?: string | null;
@@ -89,6 +112,7 @@ export interface SubscriptionsListPayload {
 }
 
 export type DeliveryStatus = "PENDING" | "DELIVERED" | "SKIPPED" | "FAILED";
+export type MealType = "BREAKFAST" | "LUNCH" | "DINNER" | "EXTRA";
 
 export interface Delivery {
   _id: string;
@@ -103,6 +127,8 @@ export interface Delivery {
   };
   deliveryDate: string;
   dateString: string;
+  mealType?: MealType;
+  quantity?: number;
   status: DeliveryStatus;
   notes?: string | null;
   createdAt: string;
@@ -148,6 +174,7 @@ export interface Bill {
   pendingAmount: number;
   paymentStatus: PaymentStatus;
   payments: PaymentRecord[];
+  deliveries?: Delivery[];
   createdAt: string;
   updatedAt: string;
 }

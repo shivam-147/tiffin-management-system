@@ -66,7 +66,16 @@ export const fetchCustomerById = createAsyncThunk(
 export const createCustomer = createAsyncThunk(
   "customers/create",
   async (
-    data: { name: string; phone: string; address: string; email?: string; notes?: string },
+    data: {
+      name: string;
+      phone: string;
+      address: string;
+      email?: string;
+      notes?: string;
+      packageCatalogId?: string;
+      advanceAmount?: number;
+      startDate?: string;
+    },
     { rejectWithValue }
   ) => {
     const response = await ApiService.post<Customer>(ENDPOINTS.CUSTOMERS.CREATE, data);

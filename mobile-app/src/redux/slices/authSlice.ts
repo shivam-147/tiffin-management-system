@@ -114,6 +114,32 @@ export const logoutAllAdmin = createAsyncThunk(
   }
 );
 
+export const updateAdminProfile = createAsyncThunk(
+  "auth/updateProfile",
+  async (
+    profileData: {
+      name?: string;
+      businessName?: string;
+      phone?: string;
+      address?: string;
+      upiId?: string;
+    },
+    { rejectWithValue }
+  ) => {
+    const response = await ApiService.put<Admin>(
+      ENDPOINTS.AUTH.UPDATE_PROFILE,
+      profileData
+    );
+
+    if (!response.success || !response.payload) {
+      return rejectWithValue(response.message || "Failed to update profile");
+    }
+
+    await StorageUtil.setItem("tms_admin_user", JSON.stringify(response.payload));
+    return response.payload;
+  }
+);
+
 export const changeAdminPassword = createAsyncThunk(
   "auth/changePassword",
   async (
@@ -209,6 +235,21 @@ const authSlice = createSlice({
       state.isLoading = false;
       state.error = null;
     });
+
+    // Update Profile
+    builder
+      .addCase(updateAdminProfile.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updateAdminProfile.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.admin = action.payload;
+      })
+      .addCase(updateAdminProfile.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      });
 
     // Change Password
     builder

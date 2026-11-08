@@ -3,6 +3,7 @@ import "../config/env";
 import database from "../config/database";
 import authRepository from "../modules/auth/auth.repository";
 import { hashPassword } from "../utils/password.util";
+import { logger } from "../utils/logger.util";
 
 const createAdmin = async () => {
   try {
@@ -23,7 +24,7 @@ const createAdmin = async () => {
     const existingAdmin = await authRepository.existsByEmail(email);
 
     if (existingAdmin) {
-      console.log("Admin with this email already exists");
+      logger.warn("Admin with this email already exists");
       return;
     }
 
@@ -35,9 +36,9 @@ const createAdmin = async () => {
       password: hashedPassword,
     });
 
-    console.log("Admin created successfully");
+    logger.info("Admin created successfully");
   } catch (error) {
-    console.error("Admin creation failed:", error);
+    logger.error("Admin creation failed:", error);
     process.exitCode = 1;
   } finally {
     const mongoose = await import("mongoose");

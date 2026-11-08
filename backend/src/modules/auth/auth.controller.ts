@@ -77,6 +77,20 @@ class AuthController {
     }
   };
 
+  updateProfile = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const admin = await authService.updateProfile(req.admin!.id, req.body);
+
+      return sendSuccess(
+        res,
+        admin,
+        "Profile updated successfully"
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
   changePassword = async (req: Request, res: Response, next: NextFunction) => {
     try {
       await authService.changePassword(req.admin!.id, req.body as ChangePasswordInput);

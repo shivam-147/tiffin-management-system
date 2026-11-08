@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 
 import { AppError } from "../errors/app-error";
 import { sendFailure } from "../utils/response.util";
+import { logger } from "../utils/logger.util";
 import { HTTP_STATUS } from "../constants/http-status.constants";
 import { ERROR_CODES } from "../constants/error-code.constants";
 import { MESSAGES } from "../constants/message.constants";
@@ -42,7 +43,7 @@ export const errorMiddleware = (
     );
   }
 
-  // Handle Mongoose CastError (e.g. invalid ObjectId)
+  // Handle Mongoose CastError (Ex. invalid ObjectId)
   if (error && typeof error === "object" && (error as any).name === "CastError") {
     const field = (error as any).path || "id";
     return sendFailure(
@@ -61,7 +62,7 @@ export const errorMiddleware = (
     );
   }
 
-  console.error(error);
+  logger.error("[Unhandled Error]:", error);
 
   return sendFailure(
     res,

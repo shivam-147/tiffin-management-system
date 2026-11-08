@@ -23,6 +23,26 @@ const adminSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    businessName: {
+      type: String,
+      trim: true,
+      default: "Tiffin Distribution Services",
+    },
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    address: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    upiId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   {
     timestamps: true,

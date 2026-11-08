@@ -3,8 +3,13 @@ import { objectIdSchema } from "../customers/customer.validator";
 
 export const createSubscriptionSchema = z.object({
   customerId: objectIdSchema,
+  packageCatalogId: objectIdSchema.optional(),
+  packageName: z.string().trim().optional(),
   pricePerTiffin: z.coerce.number().positive("Price per tiffin must be greater than zero"),
   totalTiffins: z.coerce.number().int().positive("Total tiffins must be a positive whole number"),
+  advancePaid: z.coerce.number().min(0, "Advance paid cannot be negative").optional().default(0),
+  mealsPerDay: z.coerce.number().int().min(1).max(3).optional().default(1),
+  mealTypes: z.array(z.string()).optional(),
   startDate: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
   notes: z.string().trim().max(500, "Notes cannot exceed 500 characters").optional(),
 });

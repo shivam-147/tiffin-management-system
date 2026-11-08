@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import { StorageUtil } from "../utils/storage";
 import { ApiResponse, ErrorDetail } from "../types";
+import { logger } from "../utils/logger";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -81,8 +82,10 @@ class ApiService {
 
     let response: Response;
     try {
+      logger.log(`[HTTP Request] ${method} ${endpoint}`);
       response = await fetch(url, fetchConfig);
     } catch (networkError: any) {
+      logger.error(`[HTTP Network Error] ${method} ${endpoint}:`, networkError?.message || networkError);
       return {
         success: false,
         message: networkError?.message || "Network request failed. Please check your connection.",
@@ -192,6 +195,14 @@ class ApiService {
       detail: Array.isArray(data.detail) ? data.detail : [],
       payload: data.payload !== undefined ? data.payload : null,
     };
+
+    if (response.ok) {
+      logger.info(`[HTTP Success] ${method} ${endpoint} (${response.status})`);
+    } else if (response.status >= 500) {
+      logger.error(`[HTTP Server Error] ${method} ${endpoint} (${response.status}):`, standardizedResponse.message);
+    } else {
+      logger.warn(`[HTTP Client Error] ${method} ${endpoint} (${response.status}):`, standardizedResponse.message);
+    }
 
     return standardizedResponse;
   }

@@ -11,11 +11,16 @@ export interface IPauseEntry {
 
 export interface ISubscription extends Document {
   customer: mongoose.Types.ObjectId;
+  packageCatalog?: mongoose.Types.ObjectId;
+  packageName?: string;
   pricePerTiffin: number;
   totalTiffins: number;
   deliveredQuantity: number;
   remainingQuantity: number;
   totalAmount: number;
+  advancePaid: number;
+  mealsPerDay: number;
+  mealTypes: string[];
   status: SubscriptionStatus;
   startDate: Date;
   completionDate?: Date | null;
@@ -43,6 +48,16 @@ const subscriptionSchema = new Schema<ISubscription>(
       required: true,
       index: true,
     },
+    packageCatalog: {
+      type: Schema.Types.ObjectId,
+      ref: "PackageCatalog",
+      default: null,
+    },
+    packageName: {
+      type: String,
+      trim: true,
+      default: "Standard Package",
+    },
     pricePerTiffin: {
       type: Number,
       required: true,
@@ -68,6 +83,21 @@ const subscriptionSchema = new Schema<ISubscription>(
       type: Number,
       required: true,
       min: 0,
+    },
+    advancePaid: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    mealsPerDay: {
+      type: Number,
+      default: 1,
+      min: 1,
+      max: 3,
+    },
+    mealTypes: {
+      type: [String],
+      default: ["LUNCH"],
     },
     status: {
       type: String,

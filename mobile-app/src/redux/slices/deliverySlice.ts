@@ -6,6 +6,7 @@ import {
   DeliveriesListPayload,
   DeliveryGenerateResult,
   DeliveryStatus,
+  MealType,
   Pagination,
 } from "../../types";
 
@@ -15,6 +16,7 @@ interface DeliveryState {
   selectedDelivery: Delivery | null;
   selectedDate: string; // YYYY-MM-DD
   statusFilter: DeliveryStatus | "ALL";
+  mealTypeFilter: MealType | "ALL";
   customerDeliveries: Delivery[];
   generateResult: DeliveryGenerateResult | null;
   isLoading: boolean;
@@ -30,6 +32,7 @@ const initialState: DeliveryState = {
   selectedDelivery: null,
   selectedDate: getTodayString(),
   statusFilter: "ALL",
+  mealTypeFilter: "ALL",
   customerDeliveries: [],
   generateResult: null,
   isLoading: false,
@@ -56,7 +59,7 @@ export const generateDailyDeliveries = createAsyncThunk(
 export const fetchDailyDeliveries = createAsyncThunk(
   "deliveries/fetchList",
   async (
-    params: { page?: number; limit?: number; date?: string; status?: string; customerId?: string } = {},
+    params: { page?: number; limit?: number; date?: string; status?: string; mealType?: string; customerId?: string } = {},
     { rejectWithValue }
   ) => {
     const query = new URLSearchParams();
@@ -64,6 +67,7 @@ export const fetchDailyDeliveries = createAsyncThunk(
     if (params.limit) query.append("limit", String(params.limit));
     if (params.date) query.append("date", params.date);
     if (params.status && params.status !== "ALL") query.append("status", params.status);
+    if (params.mealType && params.mealType !== "ALL") query.append("mealType", params.mealType);
     if (params.customerId) query.append("customerId", params.customerId);
 
     const queryString = query.toString();
@@ -114,6 +118,31 @@ export const fetchCustomerDeliveries = createAsyncThunk(
   }
 );
 
+export const addExtraDelivery = createAsyncThunk(
+  "deliveries/addExtra",
+  async (
+    payload: {
+      customerId: string;
+      quantity?: number;
+      date?: string;
+      mealType?: string;
+      notes?: string;
+    },
+    { rejectWithValue }
+  ) => {
+    const response = await ApiService.post<Delivery>(
+      ENDPOINTS.DELIVERIES.ADD_EXTRA,
+      payload
+    );
+
+    if (!response.success || !response.payload) {
+      return rejectWithValue(response.message || "Failed to record extra delivery");
+    }
+
+    return response.payload;
+  }
+);
+
 export const updateDeliveryStatus = createAsyncThunk(
   "deliveries/updateStatus",
   async (
@@ -142,6 +171,9 @@ const deliverySlice = createSlice({
     },
     setStatusFilter: (state, action) => {
       state.statusFilter = action.payload;
+    },
+    setMealTypeFilter: (state, action) => {
+      state.mealTypeFilter = action.payload;
     },
     setSelectedDelivery: (state, action) => {
       state.selectedDelivery = action.payload;
@@ -191,6 +223,20 @@ const deliverySlice = createSlice({
         state.customerDeliveries = action.payload.deliveries;
       });
 
+    // Add Extra
+    builder
+      .addCase(addExtraDelivery.pending, (state) => {
+        state.isSubmitting = true;
+      })
+      .addCase(addExtraDelivery.fulfilled, (state, action) => {
+        state.isSubmitting = false;
+        state.deliveries.unshift(action.payload);
+      })
+      .addCase(addExtraDelivery.rejected, (state, action) => {
+        state.isSubmitting = false;
+        state.error = (action.payload as string) || "Failed to add extra delivery";
+      });
+
     // Update Status
     builder
       .addCase(updateDeliveryStatus.pending, (state) => {
@@ -217,6 +263,7 @@ const deliverySlice = createSlice({
 export const {
   setSelectedDate,
   setStatusFilter,
+  setMealTypeFilter,
   setSelectedDelivery,
   clearGenerateResult,
   clearDeliveryError,

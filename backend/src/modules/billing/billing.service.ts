@@ -61,24 +61,52 @@ class BillingService {
       // Check existing bill
       const existingBill = await billingRepository.findByCustomerAndPeriod(customerId, billingPeriod);
 
-      // Determine price per tiffin: from delivery's subscription or active package
+      // Determine price per tiffin and any advance amount from the subscription
       let pricePerTiffin = 60; // fallback
+      let advancePaid = 0;
+      let subscriptionToUse: any = null;
+
       if (group.lastSubscriptionId) {
-        const sub = await Subscription.findById(group.lastSubscriptionId);
-        if (sub) {
-          pricePerTiffin = sub.pricePerTiffin;
-        }
+        subscriptionToUse = await Subscription.findById(group.lastSubscriptionId);
+      }
+      if (!subscriptionToUse) {
+        subscriptionToUse = await Subscription.findOne({ customer: customerId, status: { $in: ["ACTIVE", "COMPLETED"] } }).sort({ createdAt: -1 });
+      }
+
+      if (subscriptionToUse) {
+        pricePerTiffin = subscriptionToUse.pricePerTiffin;
+        advancePaid = subscriptionToUse.advancePaid || 0;
       }
 
       const totalAmount = Math.round(deliveredCount * pricePerTiffin * 100) / 100;
 
       if (existingBill) {
-        // If bill exists and has zero payments, safely sync newly added deliveries for the month
-        if (existingBill.paidAmount === 0 && existingBill.paymentStatus === "UNPAID") {
+        // If bill exists and has zero external payments recorded, safely sync newly added deliveries and advance for the month
+        const hasManualPayments = existingBill.payments && existingBill.payments.length > 0;
+        if (!hasManualPayments && existingBill.paymentStatus !== "PAID") {
           existingBill.deliveredCount = deliveredCount;
           existingBill.pricePerTiffin = pricePerTiffin;
           existingBill.totalAmount = totalAmount;
-          existingBill.pendingAmount = totalAmount;
+
+          const appliedAdvance = Math.min(advancePaid, totalAmount);
+          existingBill.paidAmount = appliedAdvance;
+          existingBill.pendingAmount = Math.max(0, totalAmount - appliedAdvance);
+          existingBill.paymentStatus = existingBill.pendingAmount === 0 ? "PAID" : appliedAdvance > 0 ? "PARTIAL" : "UNPAID";
+
+          if (appliedAdvance > 0) {
+            existingBill.payments = [
+              {
+                paymentId: `ADV-${existingBill._id.toString().slice(-6)}`,
+                amount: appliedAdvance,
+                paymentDate: new Date(),
+                paymentMethod: "CASH",
+                transactionReference: "ADVANCE_DEPOSIT",
+                notes: "Initial advance deposit credited towards monthly billing",
+                recordedAt: new Date(),
+              },
+            ];
+          }
+
           await existingBill.save();
           updatedCount++;
         } else {
@@ -89,6 +117,21 @@ class BillingService {
 
       // Create new bill
       const billNumber = `BILL-${year}${String(month).padStart(2, "0")}-${customerId.slice(-6).toUpperCase()}`;
+      const appliedAdvance = Math.min(advancePaid, totalAmount);
+      const pendingAmount = Math.max(0, totalAmount - appliedAdvance);
+      const paymentStatus = pendingAmount === 0 ? "PAID" : appliedAdvance > 0 ? "PARTIAL" : "UNPAID";
+
+      const initialPayments = appliedAdvance > 0 ? [
+        {
+          paymentId: `ADV-${customerId.slice(-6)}`,
+          amount: appliedAdvance,
+          paymentDate: new Date(),
+          paymentMethod: "CASH" as const,
+          transactionReference: "ADVANCE_DEPOSIT",
+          notes: "Initial advance deposit credited towards monthly billing",
+          recordedAt: new Date(),
+        }
+      ] : [];
 
       await billingRepository.create({
         billNumber,
@@ -99,10 +142,10 @@ class BillingService {
         deliveredCount,
         pricePerTiffin,
         totalAmount,
-        paidAmount: 0,
-        pendingAmount: totalAmount,
-        paymentStatus: "UNPAID",
-        payments: [],
+        paidAmount: appliedAdvance,
+        pendingAmount,
+        paymentStatus,
+        payments: initialPayments,
       });
 
       generatedCount++;
@@ -174,7 +217,18 @@ class BillingService {
         ERROR_CODES.NOT_FOUND
       );
     }
-    return bill;
+
+    // Also fetch the customer's deliveries for this billing period to itemize in statement/PDF
+    const deliveries = await Delivery.find({
+      customer: (bill.customer as any)._id || bill.customer,
+      dateString: { $regex: `^${bill.billingPeriod}` },
+      status: "DELIVERED",
+    }).sort({ dateString: 1, mealType: 1 });
+
+    const billObj = bill.toObject ? bill.toObject() : bill;
+    (billObj as any).deliveries = deliveries;
+
+    return billObj;
   }
 
   async getCustomerBills(customerId: string) {

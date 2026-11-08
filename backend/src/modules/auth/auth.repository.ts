@@ -27,7 +27,11 @@ class AuthRepository {
   }
 
   async updatePassword(adminId: string, passwordHash: string) {
-    return Admin.findByIdAndUpdate(adminId, { password: passwordHash }, { new: true });
+    return Admin.findByIdAndUpdate(adminId, { password: passwordHash }, { returnDocument: "after" });
+  }
+
+  async updateProfile(adminId: string, data: Record<string, any>) {
+    return Admin.findByIdAndUpdate(adminId, data, { returnDocument: "after" });
   }
 
   async saveRefreshToken(data: {
@@ -47,7 +51,7 @@ class AuthRepository {
     return RefreshToken.findOneAndUpdate(
       { tokenHash },
       { isRevoked: true, ...(replacedByTokenHash ? { replacedByTokenHash } : {}) },
-      { new: true }
+      { returnDocument: "after" }
     );
   }
 

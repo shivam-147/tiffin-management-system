@@ -4,6 +4,9 @@ export interface CreateCustomerInput {
   address: string;
   email?: string;
   notes?: string;
+  packageCatalogId?: string;
+  advanceAmount?: number;
+  startDate?: string | Date;
 }
 
 export interface UpdateCustomerInput {

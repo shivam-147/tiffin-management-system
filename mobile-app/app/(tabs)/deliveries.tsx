@@ -1,80 +1,154 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Alert,
+  ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppDispatch, useAppSelector } from "../../src/redux/hooks";
 import {
   fetchDailyDeliveries,
   generateDailyDeliveries,
+  addExtraDelivery,
   updateDeliveryStatus,
   setSelectedDate,
   setStatusFilter,
+  setMealTypeFilter,
 } from "../../src/redux/slices/deliverySlice";
-import { Delivery, DeliveryStatus } from "../../src/types";
+import { fetchCustomers } from "../../src/redux/slices/customerSlice";
+import { Delivery, DeliveryStatus, MealType, Customer } from "../../src/types";
 import { Card } from "../../src/components/ui/Card";
 import { Button } from "../../src/components/ui/Button";
 import { Input } from "../../src/components/ui/Input";
 import { StatusBadge } from "../../src/components/ui/Badge";
 import { Modal } from "../../src/components/common/Modal";
+import { ConfirmDialog, DialogType } from "../../src/components/common/ConfirmDialog";
 import { EmptyState } from "../../src/components/common/EmptyState";
 import { LoadingSpinner } from "../../src/components/common/LoadingSpinner";
 
 export default function DeliveriesScreen() {
+  const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
-  const { deliveries, pagination, isLoading, isSubmitting, selectedDate, statusFilter } =
+  const { deliveries, pagination, isLoading, isSubmitting, selectedDate, statusFilter, mealTypeFilter } =
     useAppSelector((state) => state.deliveries);
+  const { customers } = useAppSelector((state) => state.customers);
 
   const [refreshing, setRefreshing] = useState(false);
   const [notesModalVisible, setNotesModalVisible] = useState(false);
+  const [extraModalVisible, setExtraModalVisible] = useState(false);
   const [selectedDelivery, setSelectedDeliveryState] = useState<Delivery | null>(null);
   const [pendingStatus, setPendingStatus] = useState<DeliveryStatus>("DELIVERED");
   const [deliveryNotes, setDeliveryNotes] = useState("");
+
+  // Extra Delivery Form State
+  const [extraCustomerId, setExtraCustomerId] = useState("");
+  const [extraQuantity, setExtraQuantity] = useState("1");
+  const [extraMealType, setExtraMealType] = useState<"EXTRA" | "LUNCH" | "DINNER" | "BREAKFAST">("EXTRA");
+  const [extraNotes, setExtraNotes] = useState("");
+
+  // Custom Confirm Dialog State
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogConfig, setDialogConfig] = useState<{
+    type: DialogType;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    showCancel?: boolean;
+    onConfirm: () => void;
+  }>({
+    type: "info",
+    title: "",
+    message: "",
+    onConfirm: () => setDialogVisible(false),
+  });
+
+  const showDialog = (
+    title: string,
+    message: string,
+    type: DialogType = "info",
+    onConfirm?: () => void,
+    showCancel = false,
+    confirmText = "OK"
+  ) => {
+    setDialogConfig({
+      type,
+      title,
+      message,
+      confirmText,
+      showCancel,
+      onConfirm: () => {
+        setDialogVisible(false);
+        if (onConfirm) onConfirm();
+      },
+    });
+    setDialogVisible(true);
+  };
 
   const loadData = useCallback(() => {
     dispatch(
       fetchDailyDeliveries({
         date: selectedDate,
         status: statusFilter === "ALL" ? undefined : statusFilter,
+        mealType: mealTypeFilter === "ALL" ? undefined : mealTypeFilter,
         page: 1,
         limit: 50,
       })
     );
-  }, [dispatch, selectedDate, statusFilter]);
+    dispatch(fetchCustomers({ page: 1, limit: 50, isActive: "true" }));
+  }, [dispatch, selectedDate, statusFilter, mealTypeFilter]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Auto-reload on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await dispatch(
+      fetchDailyDeliveries({
+        date: selectedDate,
+        status: statusFilter === "ALL" ? undefined : statusFilter,
+        mealType: mealTypeFilter === "ALL" ? undefined : mealTypeFilter,
+        page: 1,
+        limit: 50,
+      })
+    );
     setRefreshing(false);
+  };
+
+  const changeDateByDays = (deltaDays: number) => {
+    const current = new Date(selectedDate);
+    current.setDate(current.getDate() + deltaDays);
+    dispatch(setSelectedDate(current.toISOString().slice(0, 10)));
+  };
+
+  const setDateToToday = () => {
+    dispatch(setSelectedDate(new Date().toISOString().slice(0, 10)));
   };
 
   const handleGenerateDeliveries = async () => {
     const res = await dispatch(generateDailyDeliveries(selectedDate));
     if (generateDailyDeliveries.fulfilled.match(res)) {
-      Alert.alert(
-        "Batch Generation Complete",
-        `Created ${res.payload.generatedCount} deliveries for ${res.payload.date} (${res.payload.skippedCount} skipped/existing).`
+      showDialog(
+        "Deliveries Generated",
+        `Created ${res.payload.generatedCount} meal delivery slots for ${selectedDate} (${res.payload.skippedCount} already existed/skipped).`,
+        "success"
       );
       loadData();
     } else {
-      Alert.alert("Notice", (res.payload as string) || "Failed to generate deliveries.");
+      showDialog("Notice", (res.payload as string) || "Failed to generate deliveries", "danger");
     }
   };
 
-  const handleQuickStatusChange = async (
-    delivery: Delivery,
-    newStatus: DeliveryStatus
-  ) => {
+  const handleQuickStatusChange = async (delivery: Delivery, newStatus: DeliveryStatus) => {
     if (delivery.status === newStatus) return;
 
     const res = await dispatch(
@@ -85,13 +159,13 @@ export default function DeliveriesScreen() {
     );
 
     if (!updateDeliveryStatus.fulfilled.match(res)) {
-      Alert.alert("Status Update Blocked", (res.payload as string) || "Failed to update delivery status.");
+      showDialog("Action Failed", (res.payload as string) || "Could not update status", "danger");
     }
   };
 
-  const handleOpenNotesModal = (delivery: Delivery, targetStatus: DeliveryStatus) => {
+  const handleOpenNotesModal = (delivery: Delivery, statusToSet: DeliveryStatus) => {
     setSelectedDeliveryState(delivery);
-    setPendingStatus(targetStatus);
+    setPendingStatus(statusToSet);
     setDeliveryNotes(delivery.notes || "");
     setNotesModalVisible(true);
   };
@@ -108,41 +182,90 @@ export default function DeliveriesScreen() {
     );
 
     setNotesModalVisible(false);
+
     if (!updateDeliveryStatus.fulfilled.match(res)) {
-      Alert.alert("Notice", (res.payload as string) || "Failed to update delivery status.");
+      showDialog("Action Failed", (res.payload as string) || "Could not update status", "danger");
     }
   };
 
-  const changeDateByDays = (days: number) => {
-    const current = new Date(selectedDate);
-    current.setDate(current.getDate() + days);
-    dispatch(setSelectedDate(current.toISOString().slice(0, 10)));
+  const handleOpenExtraModal = () => {
+    if (customers.length > 0) {
+      setExtraCustomerId(customers[0]._id);
+    }
+    setExtraQuantity("1");
+    setExtraMealType("EXTRA");
+    setExtraNotes("");
+    setExtraModalVisible(true);
   };
 
-  const setDateToToday = () => {
-    dispatch(setSelectedDate(new Date().toISOString().slice(0, 10)));
+  const handleConfirmExtraDelivery = async () => {
+    if (!extraCustomerId) {
+      showDialog("Required", "Please select a customer", "warning");
+      return;
+    }
+
+    const qty = Number(extraQuantity);
+    if (!qty || qty <= 0) {
+      showDialog("Invalid Quantity", "Extra quantity must be at least 1", "warning");
+      return;
+    }
+
+    const res = await dispatch(
+      addExtraDelivery({
+        customerId: extraCustomerId,
+        quantity: qty,
+        date: selectedDate,
+        mealType: extraMealType,
+        notes: extraNotes.trim() || undefined,
+      })
+    );
+
+    if (addExtraDelivery.fulfilled.match(res)) {
+      setExtraModalVisible(false);
+      showDialog("Extra Tiffin Logged", `Recorded ${qty} extra tiffin(s) for customer. Deducted from their remaining balance.`, "success");
+      loadData();
+    } else {
+      showDialog("Action Blocked", (res.payload as string) || "Cannot log extra delivery", "danger");
+    }
   };
+
+  const displayedDeliveries = deliveries.filter((item) => {
+    if (statusFilter !== "ALL" && item.status !== statusFilter) return false;
+    if (mealTypeFilter !== "ALL") {
+      const itemMeal = (item.mealType || "LUNCH").toUpperCase();
+      if (itemMeal !== mealTypeFilter) return false;
+    }
+    return true;
+  });
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className="flex-1 bg-slate-50" edges={["top", "left", "right"]}>
       {/* Header */}
       <View className="px-5 pt-3 pb-3 bg-white border-b border-slate-100 flex-row items-center justify-between">
-        <View>
+        <View className="flex-1 pr-2">
           <Text className="text-xl font-bold text-slate-900 tracking-tight">
             Daily Deliveries
           </Text>
           <Text className="text-xs text-slate-500 font-medium">
-            {pagination?.total ?? deliveries.length} records for {selectedDate}
+            {displayedDeliveries.length} records • {selectedDate}
           </Text>
         </View>
 
-        <Button
-          title="Generate Today"
-          size="sm"
-          icon={<Ionicons name="refresh" size={15} color="#FFFFFF" />}
-          onPress={handleGenerateDeliveries}
-          isLoading={isSubmitting}
-        />
+        <View className="flex-row gap-2">
+          <Button
+            title="+ Extra"
+            variant="outline"
+            size="sm"
+            onPress={handleOpenExtraModal}
+          />
+          <Button
+            title="Generate"
+            size="sm"
+            icon={<Ionicons name="refresh" size={15} color="#FFFFFF" />}
+            onPress={handleGenerateDeliveries}
+            isLoading={isSubmitting}
+          />
+        </View>
       </View>
 
       {/* Date Navigation Bar */}
@@ -169,51 +292,97 @@ export default function DeliveriesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Status Filter Tabs */}
-      <View className="py-2 px-4 bg-white border-b border-slate-100">
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={["ALL", "PENDING", "DELIVERED", "SKIPPED", "FAILED"] as (DeliveryStatus | "ALL")[]}
-          keyExtractor={(item) => item}
-          renderItem={({ item }) => {
-            const isSelected = statusFilter === item;
-            return (
-              <TouchableOpacity
-                onPress={() => dispatch(setStatusFilter(item))}
-                className={`py-1.5 px-3 rounded-full mr-2 ${
-                  isSelected ? "bg-orange-600" : "bg-slate-100"
-                }`}
-              >
-                <Text
-                  className={`text-xs font-semibold ${
-                    isSelected ? "text-white" : "text-slate-600"
+      {/* Combined Filters: Status & Meal Time */}
+      <View className="py-2.5 px-4 bg-white border-b border-slate-100">
+        {/* Row 1: Status Filter */}
+        <View className="flex-row items-center mb-2">
+          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-2 w-14">
+            Status:
+          </Text>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={true}
+            data={["ALL", "PENDING", "DELIVERED", "SKIPPED", "FAILED"] as (DeliveryStatus | "ALL")[]}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => {
+              const isSelected = statusFilter === item;
+              return (
+                <TouchableOpacity
+                  onPress={() => dispatch(setStatusFilter(item))}
+                  className={`py-1 px-3 rounded-full mr-1.5 ${
+                    isSelected ? "bg-orange-600" : "bg-slate-100"
                   }`}
                 >
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
+                  <Text
+                    className={`text-xs font-semibold ${
+                      isSelected ? "text-white" : "text-slate-600"
+                    }`}
+                  >
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
+
+        {/* Row 2: Meal Type Filter (Breakfast, Lunch, Dinner, Extra) */}
+        <View className="flex-row items-center">
+          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-2 w-12">
+            Meal:
+          </Text>
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={[
+              { label: "ALL MEALS", value: "ALL" },
+              { label: "🍳 Breakfast", value: "BREAKFAST" },
+              { label: "🍱 Lunch", value: "LUNCH" },
+              { label: "🍲 Dinner", value: "DINNER" },
+              { label: "➕ Extra", value: "EXTRA" },
+            ] as { label: string; value: MealType | "ALL" }[]}
+            keyExtractor={(item) => item.value}
+            renderItem={({ item }) => {
+              const isSelected = mealTypeFilter === item.value;
+              return (
+                <TouchableOpacity
+                  onPress={() => dispatch(setMealTypeFilter(item.value))}
+                  className={`py-1 px-2.5 rounded-full mr-1.5 border ${
+                    isSelected
+                      ? "bg-amber-600 border-amber-600"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-semibold ${
+                      isSelected ? "text-white" : "text-slate-600"
+                    }`}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
       </View>
 
       {/* Deliveries List */}
-      {isLoading && deliveries.length === 0 ? (
+      {isLoading && displayedDeliveries.length === 0 ? (
         <LoadingSpinner message="Fetching delivery list..." />
       ) : (
         <FlatList
-          data={deliveries}
+          data={displayedDeliveries}
           keyExtractor={(item) => item._id}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} />
           }
           ListEmptyComponent={
             <EmptyState
               icon="bicycle-outline"
-              title="No Deliveries For This Date"
-              description={`No deliveries found for ${selectedDate}. Tap 'Generate Today' to create records for active packages.`}
+              title="No Deliveries Found"
+              description={`No deliveries matching filters (Status: ${statusFilter}, Meal: ${mealTypeFilter}) for ${selectedDate}.`}
               actionTitle="Generate Records Now"
               onActionPress={handleGenerateDeliveries}
             />
@@ -223,18 +392,56 @@ export default function DeliveriesScreen() {
             const isSkipped = item.status === "SKIPPED";
             const isFailed = item.status === "FAILED";
 
+            const meal = (item.mealType || "LUNCH").toUpperCase();
+            const isBreakfast = meal === "BREAKFAST";
+            const isDinner = meal === "DINNER";
+            const isExtra = meal === "EXTRA";
+            const badgeClass = isBreakfast
+              ? "bg-amber-100 border-amber-300"
+              : isDinner
+              ? "bg-indigo-100 border-indigo-300"
+              : isExtra
+              ? "bg-emerald-100 border-emerald-300"
+              : "bg-orange-100 border-orange-300";
+            const textClass = isBreakfast
+              ? "text-amber-900"
+              : isDinner
+              ? "text-indigo-950"
+              : isExtra
+              ? "text-emerald-950"
+              : "text-orange-950";
+            const iconName = isBreakfast
+              ? "sunny-outline"
+              : isDinner
+              ? "moon-outline"
+              : isExtra
+              ? "add-circle-outline"
+              : "restaurant-outline";
+
             return (
               <Card className="p-4 mb-3">
-                <View className="flex-row justify-between items-start mb-1">
+                <View className="flex-row justify-between items-start mb-1.5">
                   <View className="flex-1 pr-2">
                     <Text className="text-base font-bold text-slate-900">
                       {item.customer?.name}
                     </Text>
-                    <Text className="text-xs text-slate-500 font-medium">
-                      {item.customer?.phone}
-                    </Text>
+                    <View className="flex-row items-center mt-0.5">
+                      <Ionicons name="call-outline" size={12} color="#64748B" />
+                      <Text className="text-xs text-slate-600 ml-1 font-medium">
+                        {item.customer?.phone}
+                      </Text>
+                    </View>
                   </View>
-                  <StatusBadge status={item.status} size="sm" />
+
+                  <View className="items-end">
+                    <StatusBadge status={item.status} size="sm" />
+                    <View className={`flex-row items-center border px-2 py-0.5 rounded-md mt-1 ${badgeClass}`}>
+                      <Ionicons name={iconName} size={10} color="#334155" style={{ marginRight: 3 }} />
+                      <Text className={`text-[10px] font-bold ${textClass}`}>
+                        {meal} {item.quantity && item.quantity > 1 ? `(${item.quantity}x)` : ""}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
 
                 {/* Delivery Address */}
@@ -331,6 +538,67 @@ export default function DeliveriesScreen() {
         />
       )}
 
+      {/* Extra Tiffin On-Demand Modal */}
+      <Modal
+        visible={extraModalVisible}
+        onClose={() => setExtraModalVisible(false)}
+        title="Add Extra Tiffin"
+        subtitle="Log an extra meal for a customer on demand (deducts from package)"
+      >
+        <View className="py-2">
+          <Text className="text-xs font-semibold text-slate-700 mb-1.5">
+            Select Customer *
+          </Text>
+          <View className="bg-slate-50 border border-slate-200 rounded-xl p-2 mb-3 max-h-36">
+            <ScrollView nestedScrollEnabled>
+              {customers.map((c: Customer) => (
+                <TouchableOpacity
+                  key={c._id}
+                  onPress={() => setExtraCustomerId(c._id)}
+                  className={`p-2.5 rounded-lg mb-1 flex-row justify-between items-center ${
+                    extraCustomerId === c._id ? "bg-orange-100" : "bg-white"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-semibold ${
+                      extraCustomerId === c._id ? "text-orange-950" : "text-slate-800"
+                    }`}
+                  >
+                    {c.name} ({c.phone})
+                  </Text>
+                  {extraCustomerId === c._id && (
+                    <Ionicons name="checkmark-circle" size={16} color="#EA580C" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <Input
+            label="Extra Quantity *"
+            placeholder="1"
+            value={extraQuantity}
+            onChangeText={setExtraQuantity}
+            keyboardType="numeric"
+          />
+
+          <Input
+            label="Delivery Remarks / Guest Info"
+            placeholder="Ex. Extra dinner for visiting friend"
+            value={extraNotes}
+            onChangeText={setExtraNotes}
+          />
+
+          <Button
+            title="Log Extra Tiffin & Deliver"
+            onPress={handleConfirmExtraDelivery}
+            isLoading={isSubmitting}
+            size="lg"
+            className="mt-2"
+          />
+        </View>
+      </Modal>
+
       {/* Notes Modal */}
       <Modal
         visible={notesModalVisible}
@@ -341,7 +609,7 @@ export default function DeliveriesScreen() {
         <View className="py-2">
           <Input
             label="Delivery Remarks"
-            placeholder="e.g. Left with guard, delivered 10 mins early"
+            placeholder="Ex. Left with guard, delivered 10 mins early"
             value={deliveryNotes}
             onChangeText={setDeliveryNotes}
             multiline
@@ -356,6 +624,19 @@ export default function DeliveriesScreen() {
           />
         </View>
       </Modal>
+
+      {/* Custom Confirm Dialog */}
+      <ConfirmDialog
+        visible={dialogVisible}
+        type={dialogConfig.type}
+        title={dialogConfig.title}
+        message={dialogConfig.message}
+        confirmText={dialogConfig.confirmText}
+        cancelText={dialogConfig.cancelText}
+        showCancel={dialogConfig.showCancel}
+        onConfirm={dialogConfig.onConfirm}
+        onCancel={() => setDialogVisible(false)}
+      />
     </SafeAreaView>
   );
 }

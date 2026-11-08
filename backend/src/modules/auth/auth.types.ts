@@ -16,6 +16,18 @@ export interface AdminPayload {
   id: string;
   name: string;
   email: string;
+  businessName?: string;
+  phone?: string;
+  address?: string;
+  upiId?: string;
+}
+
+export interface UpdateProfileInput {
+  name?: string;
+  businessName?: string;
+  phone?: string;
+  address?: string;
+  upiId?: string;
 }
 
 export interface AuthTokens {

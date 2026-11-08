@@ -7,7 +7,17 @@ const ENDPOINTS = {
     LOGOUT: "/auth/logout",
     LOGOUT_ALL: "/auth/logout-all",
     PROFILE: "/auth/profile",
+    UPDATE_PROFILE: "/auth/profile",
     CHANGE_PASSWORD: "/auth/change-password",
+  },
+
+  PACKAGES: {
+    LIST: (queryString?: string) =>
+      queryString ? `/packages?${queryString}` : "/packages",
+    CREATE: "/packages",
+    GET_BY_ID: (id: string) => `/packages/${id}`,
+    UPDATE: (id: string) => `/packages/${id}`,
+    DELETE: (id: string) => `/packages/${id}`,
   },
 
   CUSTOMERS: {
@@ -35,6 +45,7 @@ const ENDPOINTS = {
 
   DELIVERIES: {
     GENERATE: "/deliveries/generate",
+    ADD_EXTRA: "/deliveries/extra",
     LIST: (queryString?: string) =>
       queryString ? `/deliveries?${queryString}` : "/deliveries",
     GET_BY_ID: (id: string) => `/deliveries/${id}`,

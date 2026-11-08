@@ -107,8 +107,13 @@ export const createSubscription = createAsyncThunk(
   async (
     data: {
       customerId: string;
+      packageCatalogId?: string;
+      packageName?: string;
       pricePerTiffin: number;
       totalTiffins: number;
+      advancePaid?: number;
+      mealsPerDay?: number;
+      mealTypes?: string[];
       startDate?: string;
       notes?: string;
     },
@@ -155,7 +160,7 @@ export const pauseSubscription = createAsyncThunk(
 export const resumeSubscription = createAsyncThunk(
   "subscriptions/resume",
   async (
-    { id, data }: { id: string; data: { resumeDate?: string } },
+    { id, data = {} }: { id: string; data?: { resumeDate?: string } },
     { rejectWithValue }
   ) => {
     const response = await ApiService.post<Subscription>(

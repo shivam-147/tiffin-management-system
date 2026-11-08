@@ -5,6 +5,7 @@ import {
   loginSchema,
   refreshTokenSchema,
   changePasswordSchema,
+  updateProfileSchema,
 } from "./auth.validator";
 
 import { validateBody } from "../../middlewares/validation.middleware";
@@ -40,6 +41,13 @@ router.get(
   "/profile",
   authenticate,
   authController.getProfile
+);
+
+router.put(
+  "/profile",
+  authenticate,
+  validateBody(updateProfileSchema),
+  authController.updateProfile
 );
 
 router.put(

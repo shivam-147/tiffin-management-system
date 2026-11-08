@@ -15,6 +15,9 @@ export const createCustomerSchema = z.object({
   address: z.string().trim().min(5, "Address must contain at least 5 characters"),
   email: z.string().trim().email("Please enter a valid email address").optional().or(z.literal("")),
   notes: z.string().trim().max(500, "Notes cannot exceed 500 characters").optional().or(z.literal("")),
+  packageCatalogId: objectIdSchema.optional().or(z.literal("")),
+  advanceAmount: z.coerce.number().min(0, "Advance amount cannot be negative").optional().default(0),
+  startDate: z.string().optional(),
 });
 
 export const updateCustomerSchema = z

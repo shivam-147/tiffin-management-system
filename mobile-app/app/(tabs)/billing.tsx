@@ -1,25 +1,24 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Alert,
-  Share,
+  ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppDispatch, useAppSelector } from "../../src/redux/hooks";
 import {
   fetchBills,
+  fetchBillById,
   generateMonthlyBills,
   recordPayment,
-  fetchReceipt,
   setSelectedMonth,
   setSelectedYear,
   setPaymentStatusFilter,
-  clearReceipt,
 } from "../../src/redux/slices/billingSlice";
 import { Bill, PaymentMethod, PaymentStatus } from "../../src/types";
 import { Card } from "../../src/components/ui/Card";
@@ -27,9 +26,11 @@ import { Button } from "../../src/components/ui/Button";
 import { Input } from "../../src/components/ui/Input";
 import { StatusBadge } from "../../src/components/ui/Badge";
 import { Modal } from "../../src/components/common/Modal";
+import { ConfirmDialog, DialogType } from "../../src/components/common/ConfirmDialog";
 import { EmptyState } from "../../src/components/common/EmptyState";
 import { LoadingSpinner } from "../../src/components/common/LoadingSpinner";
 import { APP_CONFIG, PAYMENT_METHODS } from "../../src/constants/app.constants";
+import PdfService from "../../src/services/PdfService";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -37,29 +38,68 @@ const MONTH_NAMES = [
 ];
 
 export default function BillingScreen() {
+  const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const {
     bills,
     pagination,
-    receipt,
     isLoading,
     isSubmitting,
-    isReceiptLoading,
     selectedMonth,
     selectedYear,
     paymentStatusFilter,
   } = useAppSelector((state) => state.billing);
+  const { admin } = useAppSelector((state) => state.auth);
 
   const [refreshing, setRefreshing] = useState(false);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [receiptModalVisible, setReceiptModalVisible] = useState(false);
-  const [selectedBill, setSelectedBillState] = useState<Bill | null>(null);
+  const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
 
-  // Payment Form States
+  // Payment Form State
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("UPI");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [transactionRef, setTransactionRef] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Custom Confirm Dialog State
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogConfig, setDialogConfig] = useState<{
+    type: DialogType;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    showCancel?: boolean;
+    onConfirm: () => void;
+  }>({
+    type: "info",
+    title: "",
+    message: "",
+    onConfirm: () => setDialogVisible(false),
+  });
+
+  const showDialog = (
+    title: string,
+    message: string,
+    type: DialogType = "info",
+    onConfirm?: () => void,
+    showCancel = false,
+    confirmText = "OK"
+  ) => {
+    setDialogConfig({
+      type,
+      title,
+      message,
+      confirmText,
+      showCancel,
+      onConfirm: () => {
+        setDialogVisible(false);
+        if (onConfirm) onConfirm();
+      },
+    });
+    setDialogVisible(true);
+  };
 
   const loadData = useCallback(() => {
     dispatch(
@@ -73,14 +113,41 @@ export default function BillingScreen() {
     );
   }, [dispatch, selectedMonth, selectedYear, paymentStatusFilter]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  // Auto-reload on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await dispatch(
+      fetchBills({
+        month: selectedMonth,
+        year: selectedYear,
+        paymentStatus: paymentStatusFilter === "ALL" ? undefined : paymentStatusFilter,
+        page: 1,
+        limit: 50,
+      })
+    );
     setRefreshing(false);
+  };
+
+  const changeMonth = (delta: number) => {
+    let nextMonth = selectedMonth + delta;
+    let nextYear = selectedYear;
+
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear += 1;
+    } else if (nextMonth < 1) {
+      nextMonth = 12;
+      nextYear -= 1;
+    }
+
+    dispatch(setSelectedMonth(nextMonth));
+    dispatch(setSelectedYear(nextYear));
   };
 
   const handleGenerateBills = async () => {
@@ -89,39 +156,32 @@ export default function BillingScreen() {
     );
 
     if (generateMonthlyBills.fulfilled.match(res)) {
-      Alert.alert(
-        "Monthly Bills Generated",
-        `Created ${res.payload.billsGenerated} bills (${res.payload.billsUpdated} updated, ${res.payload.billsSkipped} skipped) for ${res.payload.month} ${res.payload.year}.`
+      showDialog(
+        "Bills Calculated",
+        `Generated ${res.payload.billsGenerated} customer bills (${res.payload.billsUpdated} updated, ${res.payload.billsSkipped} skipped) based strictly on delivered meals.`,
+        "success"
       );
       loadData();
     } else {
-      Alert.alert("Notice", (res.payload as string) || "Failed to generate bills.");
+      showDialog("Billing Failed", (res.payload as string) || "Failed to generate monthly bills", "danger");
     }
   };
 
   const handleOpenPaymentModal = (bill: Bill) => {
-    setSelectedBillState(bill);
+    setSelectedBill(bill);
     setPaymentAmount(String(bill.pendingAmount));
-    setPaymentMethod("UPI");
+    setPaymentMethod("CASH");
     setTransactionRef("");
     setPaymentNotes("");
     setPaymentModalVisible(true);
   };
 
-  const handleRecordPayment = async () => {
+  const handleConfirmPayment = async () => {
     if (!selectedBill) return;
 
-    const amount = Number(paymentAmount);
-    if (isNaN(amount) || amount <= 0) {
-      Alert.alert("Invalid Amount", "Please enter a valid positive payment amount.");
-      return;
-    }
-
-    if (amount > selectedBill.pendingAmount) {
-      Alert.alert(
-        "Amount Exceeded",
-        `Payment cannot exceed the outstanding amount of ₹${selectedBill.pendingAmount}.`
-      );
+    const amt = Number(paymentAmount);
+    if (!amt || amt <= 0) {
+      showDialog("Invalid Amount", "Payment amount must be greater than zero", "warning");
       return;
     }
 
@@ -129,7 +189,7 @@ export default function BillingScreen() {
       recordPayment({
         id: selectedBill._id,
         data: {
-          amount,
+          amount: amt,
           paymentMethod,
           transactionReference: transactionRef.trim() || undefined,
           notes: paymentNotes.trim() || undefined,
@@ -138,72 +198,62 @@ export default function BillingScreen() {
     );
 
     if (recordPayment.fulfilled.match(res)) {
+      const updatedBill = res.payload;
       setPaymentModalVisible(false);
-      Alert.alert("Success", "Payment recorded successfully.");
+      showDialog(
+        "Payment Recorded",
+        `Successfully logged ₹${amt} via ${paymentMethod}. Outstanding balance: ₹${updatedBill.pendingAmount}.`,
+        "success",
+        () => handleSharePdfReceipt(updatedBill)
+      );
       loadData();
     } else {
-      Alert.alert("Notice", (res.payload as string) || "Failed to record payment.");
+      showDialog("Payment Error", (res.payload as string) || "Failed to record payment", "danger");
     }
   };
 
-  const handleViewReceipt = async (bill: Bill) => {
-    setSelectedBillState(bill);
-    setReceiptModalVisible(true);
-    await dispatch(fetchReceipt(bill._id));
-  };
-
-  const handleShareReceipt = async () => {
-    if (!receipt) return;
-
-    const shareMessage = `*TIFFIN SERVICE RECEIPT*
-${receipt.businessName}
-Receipt No: ${receipt.receiptNumber}
-Bill No: ${receipt.billNumber}
-Date: ${new Date(receipt.receiptGeneratedDate).toLocaleDateString()}
-
-*Customer:* ${receipt.customer.name} (${receipt.customer.phone})
-*Billing Month:* ${receipt.billingMonth} ${receipt.billingYear}
-
-*Meals Delivered:* ${receipt.totalDeliveredTiffins} tiffins
-*Rate:* ₹${receipt.pricePerTiffin}/tiffin
-*Total Amount:* ₹${receipt.totalBillAmount}
-*Paid Amount:* ₹${receipt.paidAmount}
-*Pending Balance:* ₹${receipt.pendingAmount}
-*Status:* ${receipt.paymentStatus}
-
-Thank you for subscribing to ${receipt.businessName}!`;
-
+  const handlePrintReceipt = async (bill: Bill) => {
     try {
-      await Share.share({
-        message: shareMessage,
-        title: `Receipt ${receipt.receiptNumber}`,
+      setIsGeneratingPdf(true);
+      const res = await dispatch(fetchBillById(bill._id));
+      const fullBill = fetchBillById.fulfilled.match(res) ? res.payload : bill;
+
+      await PdfService.printInvoice({
+        bill: fullBill,
+        admin,
+        deliveries: fullBill.deliveries || [],
       });
-    } catch {
-      // ignore
+    } catch (err: any) {
+      showDialog("Print Error", err.message || "Failed to open system print dialog", "danger");
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
-  const changeMonth = (direction: number) => {
-    let newMonth = selectedMonth + direction;
-    let newYear = selectedYear;
+  const handleSharePdfReceipt = async (bill: Bill) => {
+    try {
+      setIsGeneratingPdf(true);
+      // Fetch full bill details with its daily meal deliveries
+      const res = await dispatch(fetchBillById(bill._id));
+      const fullBill = fetchBillById.fulfilled.match(res) ? res.payload : bill;
 
-    if (newMonth > 12) {
-      newMonth = 1;
-      newYear += 1;
-    } else if (newMonth < 1) {
-      newMonth = 12;
-      newYear -= 1;
+      await PdfService.generateAndShareReceipt({
+        bill: fullBill,
+        admin,
+        deliveries: fullBill.deliveries || [],
+      });
+    } catch (err: any) {
+      showDialog("PDF Export Error", err.message || "Failed to generate or share client PDF receipt", "danger");
+    } finally {
+      setIsGeneratingPdf(false);
     }
-
-    dispatch(setSelectedMonth(newMonth));
-    dispatch(setSelectedYear(newYear));
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className="flex-1 bg-slate-50" edges={["top", "left", "right"]}>
       {/* Top Header */}
       <View className="px-5 pt-3 pb-3 bg-white border-b border-slate-100 flex-row items-center justify-between">
-        <View>
+        <View className="flex-1 pr-2">
           <Text className="text-xl font-bold text-slate-900 tracking-tight">
             Monthly Billing
           </Text>
@@ -278,7 +328,7 @@ Thank you for subscribing to ${receipt.businessName}!`;
         <FlatList
           data={bills}
           keyExtractor={(item) => item._id}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} />
           }
@@ -300,65 +350,66 @@ Thank you for subscribing to ${receipt.businessName}!`;
                       {item.customer?.name}
                     </Text>
                     <Text className="text-xs text-slate-500 font-medium">
-                      {item.customer?.phone} • {item.billNumber}
+                      📞 {item.customer?.phone} • Bill #{item.billNumber}
                     </Text>
                   </View>
-                  <StatusBadge status={item.paymentStatus} size="sm" />
+                  <StatusBadge status={item.paymentStatus} />
                 </View>
 
-                {/* Financial Overview */}
-                <View className="p-3 bg-slate-50 rounded-xl my-2">
+                {/* Metrics Breakdown */}
+                <View className="bg-slate-50 rounded-xl p-3 my-2">
                   <View className="flex-row justify-between items-center mb-1">
-                    <Text className="text-xs text-slate-500">Delivered Meals:</Text>
+                    <Text className="text-xs text-slate-600 font-medium">Delivered Meals</Text>
                     <Text className="text-xs font-bold text-slate-800">
-                      {item.deliveredCount} tiffins @ ₹{item.pricePerTiffin}
+                      {item.deliveredCount} tiffins @ ₹{item.pricePerTiffin} / Each
                     </Text>
                   </View>
 
                   <View className="flex-row justify-between items-center mb-1">
-                    <Text className="text-xs text-slate-500">Total Billed:</Text>
-                    <Text className="text-sm font-extrabold text-slate-900">
-                      {APP_CONFIG.CURRENCY_SYMBOL}{item.totalAmount}
+                    <Text className="text-xs text-slate-600 font-medium">Total Billed</Text>
+                    <Text className="text-xs font-bold text-slate-900">
+                      {APP_CONFIG.CURRENCY_SYMBOL}
+                      {item.totalAmount.toLocaleString()}
                     </Text>
                   </View>
 
-                  <View className="flex-row justify-between items-center pt-1 border-t border-slate-200">
-                    <View>
-                      <Text className="text-[10px] text-slate-400 uppercase font-bold">Paid</Text>
-                      <Text className="text-xs font-bold text-emerald-600">
-                        {APP_CONFIG.CURRENCY_SYMBOL}{item.paidAmount}
-                      </Text>
-                    </View>
-                    <View className="items-end">
-                      <Text className="text-[10px] text-slate-400 uppercase font-bold">Outstanding</Text>
-                      <Text className="text-sm font-extrabold text-rose-600">
-                        {APP_CONFIG.CURRENCY_SYMBOL}{item.pendingAmount}
-                      </Text>
-                    </View>
+                  <View className="flex-row justify-between items-center mb-1">
+                    <Text className="text-xs text-emerald-700 font-medium">Paid So Far</Text>
+                    <Text className="text-xs font-bold text-emerald-700">
+                      {APP_CONFIG.CURRENCY_SYMBOL}
+                      {item.paidAmount.toLocaleString()}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row justify-between items-center pt-1.5 border-t border-slate-200">
+                    <Text className="text-xs font-bold text-rose-700">Pending Due</Text>
+                    <Text className="text-sm font-extrabold text-rose-700">
+                      {APP_CONFIG.CURRENCY_SYMBOL}
+                      {item.pendingAmount.toLocaleString()}
+                    </Text>
                   </View>
                 </View>
 
                 {/* Actions */}
-                <View className="flex-row gap-2 mt-2">
+                <View className="flex-row justify-end items-center gap-2 mt-2 pt-2 border-t border-slate-100">
+                  <Button
+                    title="Print & Share"
+                    variant="outline"
+                    size="sm"
+                    icon={<Ionicons name="print-outline" size={15} color="#334155" />}
+                    onPress={() => handlePrintReceipt(item)}
+                    isLoading={isGeneratingPdf}
+                  />
+
                   {item.paymentStatus !== "PAID" && (
                     <Button
                       title="Record Payment"
                       variant="primary"
                       size="sm"
-                      icon={<Ionicons name="card" size={14} color="#FFFFFF" />}
-                      className="flex-1"
+                      icon={<Ionicons name="card-outline" size={15} color="#FFFFFF" />}
                       onPress={() => handleOpenPaymentModal(item)}
                     />
                   )}
-
-                  <Button
-                    title="View Receipt"
-                    variant="outline"
-                    size="sm"
-                    icon={<Ionicons name="receipt-outline" size={14} color="#475569" />}
-                    className="flex-1"
-                    onPress={() => handleViewReceipt(item)}
-                  />
                 </View>
               </Card>
             );
@@ -371,13 +422,14 @@ Thank you for subscribing to ${receipt.businessName}!`;
         visible={paymentModalVisible}
         onClose={() => setPaymentModalVisible(false)}
         title="Record Payment"
-        subtitle={`Bill ${selectedBill?.billNumber} for ${selectedBill?.customer?.name}`}
+        subtitle={`Collect payment for ${selectedBill?.customer?.name} (#${selectedBill?.billNumber})`}
       >
         <View className="py-2">
-          <View className="p-3 bg-slate-50 rounded-xl mb-3 flex-row justify-between items-center">
-            <Text className="text-xs text-slate-500">Current Outstanding:</Text>
-            <Text className="text-base font-extrabold text-rose-600">
-              {APP_CONFIG.CURRENCY_SYMBOL}{selectedBill?.pendingAmount}
+          {/* Outstanding Balance Banner */}
+          <View className="p-3 bg-rose-50 border border-rose-200 rounded-xl mb-4 flex-row justify-between items-center">
+            <Text className="text-xs font-semibold text-rose-900">Pending Balance:</Text>
+            <Text className="text-base font-extrabold text-rose-700">
+              ₹{selectedBill?.pendingAmount?.toLocaleString()}
             </Text>
           </View>
 
@@ -386,27 +438,26 @@ Thank you for subscribing to ${receipt.businessName}!`;
             value={paymentAmount}
             onChangeText={setPaymentAmount}
             keyboardType="numeric"
-            placeholder="Enter payment amount"
+            placeholder="Enter received amount"
           />
 
-          <Text className="text-sm font-medium text-slate-700 mb-1.5">
-            Payment Mode *
-          </Text>
+          {/* Payment Method Selector */}
+          <Text className="text-xs font-semibold text-slate-700 mb-1.5">Payment Method *</Text>
           <View className="flex-row flex-wrap gap-2 mb-4">
-            {PAYMENT_METHODS.map((method) => {
+            {(PAYMENT_METHODS as readonly PaymentMethod[]).map((method) => {
               const isSelected = paymentMethod === method;
               return (
                 <TouchableOpacity
                   key={method}
                   onPress={() => setPaymentMethod(method)}
-                  className={`py-2 px-3.5 rounded-xl border ${
+                  className={`py-2 px-3 rounded-xl border ${
                     isSelected
                       ? "bg-orange-600 border-orange-600"
-                      : "bg-slate-50 border-slate-200"
+                      : "bg-white border-slate-200"
                   }`}
                 >
                   <Text
-                    className={`text-xs font-semibold ${
+                    className={`text-xs font-bold ${
                       isSelected ? "text-white" : "text-slate-700"
                     }`}
                   >
@@ -418,22 +469,22 @@ Thank you for subscribing to ${receipt.businessName}!`;
           </View>
 
           <Input
-            label="Transaction Reference (Optional)"
-            placeholder="UPI Ref ID, Cheque No, or UTR"
+            label="Transaction / Reference ID (Optional)"
+            placeholder="Ex. UPI Ref / Cheque No."
             value={transactionRef}
             onChangeText={setTransactionRef}
           />
 
           <Input
             label="Remarks (Optional)"
-            placeholder="e.g. Paid in cash at delivery"
+            placeholder="Ex. Paid in full for current month"
             value={paymentNotes}
             onChangeText={setPaymentNotes}
           />
 
           <Button
-            title="Confirm Payment"
-            onPress={handleRecordPayment}
+            title="Confirm Payment & Share PDF"
+            onPress={handleConfirmPayment}
             isLoading={isSubmitting}
             size="lg"
             className="mt-2"
@@ -441,110 +492,18 @@ Thank you for subscribing to ${receipt.businessName}!`;
         </View>
       </Modal>
 
-      {/* Receipt Modal */}
-      <Modal
-        visible={receiptModalVisible}
-        onClose={() => {
-          setReceiptModalVisible(false);
-          dispatch(clearReceipt());
-        }}
-        title="Payment Receipt"
-        subtitle={receipt?.receiptNumber || "Loading..."}
-      >
-        {isReceiptLoading && !receipt ? (
-          <LoadingSpinner message="Generating receipt..." />
-        ) : receipt ? (
-          <View className="py-2">
-            {/* Receipt Box */}
-            <View className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-4">
-              {/* Header */}
-              <View className="items-center pb-3 border-b border-dashed border-slate-300">
-                <Text className="text-base font-extrabold text-slate-900 tracking-tight">
-                  {receipt.businessName}
-                </Text>
-                <Text className="text-xs text-slate-500 font-medium">
-                  {receipt.billingMonth} {receipt.billingYear} Statement
-                </Text>
-              </View>
-
-              {/* Customer Info */}
-              <View className="py-3 border-b border-dashed border-slate-300">
-                <Text className="text-xs text-slate-400 font-bold uppercase">Customer</Text>
-                <Text className="text-sm font-bold text-slate-800">{receipt.customer.name}</Text>
-                <Text className="text-xs text-slate-600">{receipt.customer.phone}</Text>
-                <Text className="text-xs text-slate-500 mt-0.5">{receipt.customer.address}</Text>
-              </View>
-
-              {/* Meal Itemization */}
-              <View className="py-3 border-b border-dashed border-slate-300">
-                <View className="flex-row justify-between items-center mb-1">
-                  <Text className="text-xs text-slate-600">Delivered Meals</Text>
-                  <Text className="text-xs font-semibold text-slate-800">
-                    {receipt.totalDeliveredTiffins} meals
-                  </Text>
-                </View>
-                <View className="flex-row justify-between items-center mb-1">
-                  <Text className="text-xs text-slate-600">Rate per Meal</Text>
-                  <Text className="text-xs font-semibold text-slate-800">
-                    ₹{receipt.pricePerTiffin}
-                  </Text>
-                </View>
-                <View className="flex-row justify-between items-center pt-1">
-                  <Text className="text-sm font-bold text-slate-900">Total Billed</Text>
-                  <Text className="text-sm font-extrabold text-slate-900">
-                    ₹{receipt.totalBillAmount}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Payment Summary */}
-              <View className="py-3">
-                <View className="flex-row justify-between items-center mb-1">
-                  <Text className="text-xs font-semibold text-emerald-700">Total Paid</Text>
-                  <Text className="text-xs font-bold text-emerald-700">₹{receipt.paidAmount}</Text>
-                </View>
-                <View className="flex-row justify-between items-center mb-2">
-                  <Text className="text-xs font-semibold text-rose-700">Pending Due</Text>
-                  <Text className="text-xs font-bold text-rose-700">₹{receipt.pendingAmount}</Text>
-                </View>
-
-                <View className="flex-row justify-between items-center pt-2 border-t border-slate-200">
-                  <Text className="text-xs font-bold text-slate-700">Status</Text>
-                  <StatusBadge status={receipt.paymentStatus} size="sm" />
-                </View>
-              </View>
-
-              {/* Payment History Log */}
-              {receipt.paymentHistory?.length > 0 && (
-                <View className="pt-2 border-t border-dashed border-slate-300">
-                  <Text className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                    Payment History
-                  </Text>
-                  {receipt.paymentHistory.map((p, idx) => (
-                    <View key={idx} className="flex-row justify-between items-center py-1">
-                      <Text className="text-[11px] text-slate-600">
-                        {p.paymentMethod} • {new Date(p.paymentDate).toLocaleDateString()}
-                      </Text>
-                      <Text className="text-[11px] font-bold text-emerald-600">
-                        +₹{p.amount}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Share Action */}
-            <Button
-              title="Share Receipt (WhatsApp / SMS)"
-              variant="primary"
-              icon={<Ionicons name="share-social-outline" size={18} color="#FFFFFF" />}
-              onPress={handleShareReceipt}
-              size="lg"
-            />
-          </View>
-        ) : null}
-      </Modal>
+      {/* Custom Confirm Dialog */}
+      <ConfirmDialog
+        visible={dialogVisible}
+        type={dialogConfig.type}
+        title={dialogConfig.title}
+        message={dialogConfig.message}
+        confirmText={dialogConfig.confirmText}
+        cancelText={dialogConfig.cancelText}
+        showCancel={dialogConfig.showCancel}
+        onConfirm={dialogConfig.onConfirm}
+        onCancel={() => setDialogVisible(false)}
+      />
     </SafeAreaView>
   );
 }

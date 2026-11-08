@@ -24,7 +24,7 @@ class CustomerRepository {
   }
 
   async update(id: string, data: UpdateCustomerInput): Promise<ICustomer | null> {
-    return Customer.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    return Customer.findByIdAndUpdate(id, data, { returnDocument: "after", runValidators: true });
   }
 
   async find(
@@ -43,7 +43,7 @@ class CustomerRepository {
   }
 
   async deactivate(id: string): Promise<ICustomer | null> {
-    return Customer.findByIdAndUpdate(id, { isActive: false }, { new: true });
+    return Customer.findByIdAndUpdate(id, { isActive: false }, { returnDocument: "after" });
   }
 }
 

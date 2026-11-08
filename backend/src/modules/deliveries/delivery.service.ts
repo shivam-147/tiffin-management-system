@@ -33,32 +33,45 @@ class DeliveryService {
         continue;
       }
 
-      // 2. Check if a delivery already exists for this customer on this target date
-      const existing = await deliveryRepository.findByCustomerAndDate(
-        customer._id.toString(),
-        targetDateStr
-      );
+      const mealSlots =
+        sub.mealTypes && sub.mealTypes.length > 0
+          ? sub.mealTypes
+          : sub.mealsPerDay === 2
+          ? ["LUNCH", "DINNER"]
+          : sub.mealsPerDay === 3
+          ? ["BREAKFAST", "LUNCH", "DINNER"]
+          : ["LUNCH"];
 
-      if (existing) {
-        skippedCount++;
-        continue;
-      }
+      for (const slot of mealSlots) {
+        // Check if a delivery already exists for this customer on this target date & slot
+        const existing = await deliveryRepository.findByCustomerAndDate(
+          customer._id.toString(),
+          targetDateStr,
+          slot
+        );
 
-      try {
-        await deliveryRepository.create({
-          customer: customer._id,
-          subscription: sub._id as any,
-          deliveryDate,
-          dateString: targetDateStr,
-          status: "PENDING",
-        });
-        generatedCount++;
-      } catch (err: any) {
-        // In case of parallel race condition caught by unique index
-        if (err.code === 11000) {
+        if (existing) {
           skippedCount++;
-        } else {
-          throw err;
+          continue;
+        }
+
+        try {
+          await deliveryRepository.create({
+            customer: customer._id,
+            subscription: sub._id as any,
+            deliveryDate,
+            dateString: targetDateStr,
+            mealType: slot as any,
+            quantity: 1,
+            status: "PENDING",
+          });
+          generatedCount++;
+        } catch (err: any) {
+          if (err.code === 11000) {
+            skippedCount++;
+          } else {
+            throw err;
+          }
         }
       }
     }
@@ -84,6 +97,10 @@ class DeliveryService {
 
     if (query.status && query.status !== "ALL") {
       filter.status = query.status;
+    }
+
+    if (query.mealType && query.mealType !== "ALL") {
+      filter.mealType = query.mealType;
     }
 
     if (query.customerId) {
@@ -203,16 +220,18 @@ class DeliveryService {
         );
       }
 
-      // Atomically decrement remainingQuantity and increment deliveredQuantity
+      const qty = delivery.quantity || 1;
+
+      // Atomically decrement remainingQuantity and increment deliveredQuantity by qty
       const updatedSub = await Subscription.findOneAndUpdate(
         {
           _id: subscription._id,
-          remainingQuantity: { $gt: 0 },
+          remainingQuantity: { $gte: qty },
         },
         {
-          $inc: { remainingQuantity: -1, deliveredQuantity: 1 },
+          $inc: { remainingQuantity: -qty, deliveredQuantity: qty },
         },
-        { new: true }
+        { returnDocument: "after" }
       );
 
       if (!updatedSub) {
@@ -246,8 +265,9 @@ class DeliveryService {
     }
     // CASE 2: Transitioning from DELIVERED to non-DELIVERED (REVERSE 1 TIFFIN DEDUCTION)
     else if (previousStatus === "DELIVERED" && newStatus !== "DELIVERED") {
+      const qty = delivery.quantity || 1;
       const updatePayload: Record<string, any> = {
-        $inc: { remainingQuantity: 1, deliveredQuantity: -1 },
+        $inc: { remainingQuantity: qty, deliveredQuantity: -qty },
       };
 
       // If package was marked COMPLETED, restore it to ACTIVE since balance is restored
@@ -274,6 +294,65 @@ class DeliveryService {
     }
 
     return deliveryRepository.findById(id);
+  }
+
+  async addExtraDelivery(data: {
+    customerId: string;
+    quantity?: number;
+    date?: string;
+    mealType?: any;
+    notes?: string;
+  }) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const targetDateStr = data.date || todayStr;
+    const deliveryDate = new Date(`${targetDateStr}T00:00:00.000Z`);
+    const qty = data.quantity || 1;
+
+    // Find active subscription for customer
+    const subscription = await Subscription.findOne({
+      customer: data.customerId,
+      status: "ACTIVE",
+      remainingQuantity: { $gte: qty },
+    });
+
+    if (!subscription) {
+      throw new AppError(
+        "Cannot add extra delivery: Customer does not have an active package with sufficient remaining balance",
+        HTTP_STATUS.BAD_REQUEST,
+        ERROR_CODES.BAD_REQUEST
+      );
+    }
+
+    const delivery = await deliveryRepository.create({
+      customer: data.customerId as any,
+      subscription: subscription._id as any,
+      deliveryDate,
+      dateString: targetDateStr,
+      mealType: data.mealType || "EXTRA",
+      quantity: qty,
+      status: "DELIVERED",
+      notes: data.notes || "Extra tiffin requested",
+    });
+
+    // Atomically decrement remainingQuantity and increment deliveredQuantity
+    const updatedSub = await Subscription.findOneAndUpdate(
+      {
+        _id: subscription._id,
+        remainingQuantity: { $gte: qty },
+      },
+      {
+        $inc: { remainingQuantity: -qty, deliveredQuantity: qty },
+      },
+      { returnDocument: "after" }
+    );
+
+    if (updatedSub && updatedSub.remainingQuantity === 0) {
+      updatedSub.status = "COMPLETED";
+      updatedSub.completionDate = new Date();
+      await updatedSub.save();
+    }
+
+    return deliveryRepository.findById(delivery._id.toString());
   }
 }
 

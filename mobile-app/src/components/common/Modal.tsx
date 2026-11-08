@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ModalProps {
   visible: boolean;
@@ -26,6 +27,8 @@ export const Modal: React.FC<ModalProps> = ({
   subtitle,
   children,
 }) => {
+  const insets = useSafeAreaInsets();
+
   return (
     <RNModal
       visible={visible}
@@ -39,7 +42,10 @@ export const Modal: React.FC<ModalProps> = ({
             <KeyboardAvoidingView
               behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
-              <View className="bg-white rounded-t-3xl sm:rounded-3xl p-5 max-h-[85vh] shadow-xl">
+              <View
+                className="bg-white rounded-t-3xl sm:rounded-3xl p-5 max-h-[85vh] shadow-xl"
+                style={{ paddingBottom: Math.max(insets.bottom, 16) + 12 }}
+              >
                 {/* Modal Header */}
                 <View className="flex-row items-center justify-between pb-3 border-b border-slate-100">
                   <View className="flex-1 pr-2">

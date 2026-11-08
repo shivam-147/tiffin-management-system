@@ -52,6 +52,19 @@ class DeliveryController {
     }
   };
 
+  addExtraDelivery = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const delivery = await deliveryService.addExtraDelivery(req.body);
+      return sendSuccess(
+        res,
+        delivery,
+        "Extra tiffin delivery recorded successfully"
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getCustomerDeliveries = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const customerId = req.params.customerId as string;

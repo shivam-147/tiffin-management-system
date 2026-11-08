@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppDispatch, useAppSelector } from "../../src/redux/hooks";
 import { loginAdmin, clearAuthError } from "../../src/redux/slices/authSlice";
 import ApiService from "../../src/services/ApiService";
@@ -51,10 +52,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      className="flex-1 bg-white"
-    >
+    <SafeAreaView className="flex-1 bg-white" edges={["top", "bottom", "left", "right"]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1 bg-white"
+      >
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -137,7 +139,7 @@ export default function LoginScreen() {
                 Backend API Endpoint
               </Text>
               <Text className="text-[11px] text-slate-500 mb-2">
-                Use your computer's Wi-Fi IP (e.g. http://192.168.1.5:5000/api/v1) if testing on a real phone.
+                Use your computer's Wi-Fi IP (Ex. http://192.168.1.5:5000/api/v1) if testing on a real phone.
               </Text>
               <Input
                 value={apiUrl}
@@ -156,5 +158,6 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

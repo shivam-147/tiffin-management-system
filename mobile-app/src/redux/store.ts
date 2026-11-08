@@ -5,6 +5,7 @@ import subscriptionReducer from "./slices/subscriptionSlice";
 import deliveryReducer from "./slices/deliverySlice";
 import billingReducer from "./slices/billingSlice";
 import dashboardReducer from "./slices/dashboardSlice";
+import packageReducer from "./slices/packageSlice";
 import ApiService from "../services/ApiService";
 
 export const store = configureStore({
@@ -15,6 +16,7 @@ export const store = configureStore({
     deliveries: deliveryReducer,
     billing: billingReducer,
     dashboard: dashboardReducer,
+    packages: packageReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { APP_CONFIG } from "../constants/app.constants";
+import { logger } from "./logger";
 
 const isWeb = Platform.OS === "web";
 
@@ -15,7 +16,7 @@ export const StorageUtil = {
         await SecureStore.setItemAsync(key, value);
       }
     } catch (error) {
-      console.warn(`SecureStore setItem failed for key "${key}":`, error);
+      logger.warn(`SecureStore setItem failed for key "${key}":`, error);
     }
   },
 
@@ -29,7 +30,7 @@ export const StorageUtil = {
       }
       return await SecureStore.getItemAsync(key);
     } catch (error) {
-      console.warn(`SecureStore getItem failed for key "${key}":`, error);
+      logger.warn(`SecureStore getItem failed for key "${key}":`, error);
       return null;
     }
   },
@@ -44,7 +45,7 @@ export const StorageUtil = {
         await SecureStore.deleteItemAsync(key);
       }
     } catch (error) {
-      console.warn(`SecureStore deleteItem failed for key "${key}":`, error);
+      logger.warn(`SecureStore deleteItem failed for key "${key}":`, error);
     }
   },
 

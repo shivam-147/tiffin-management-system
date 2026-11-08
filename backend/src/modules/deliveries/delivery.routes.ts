@@ -2,6 +2,7 @@ import { Router } from "express";
 import deliveryController from "./delivery.controller";
 import {
   generateDeliveriesSchema,
+  addExtraDeliverySchema,
   updateDeliveryStatusSchema,
   deliveryQuerySchema,
   deliveryIdParamSchema,
@@ -23,6 +24,12 @@ router.post(
   "/generate",
   validateBody(generateDeliveriesSchema),
   deliveryController.generateDailyDeliveries
+);
+
+router.post(
+  "/extra",
+  validateBody(addExtraDeliverySchema),
+  deliveryController.addExtraDelivery
 );
 
 router.get(

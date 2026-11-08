@@ -2,7 +2,7 @@ import { PaymentMethod, PaymentStatus } from "./bill.model";
 
 export interface GenerateBillsInput {
   month?: number; // 1-12
-  year?: number;  // e.g. 2026
+  year?: number;  // Ex. 2026
 }
 
 export interface RecordPaymentInput {

@@ -1,14 +1,14 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppDispatch, useAppSelector } from "../../src/redux/hooks";
 import { fetchDashboardSummary } from "../../src/redux/slices/dashboardSlice";
@@ -18,18 +18,21 @@ import {
   logoutAdmin,
   logoutAllAdmin,
   changeAdminPassword,
+  updateAdminProfile,
 } from "../../src/redux/slices/authSlice";
 import { StatCard } from "../../src/components/ui/StatCard";
 import { Card } from "../../src/components/ui/Card";
 import { Button } from "../../src/components/ui/Button";
 import { Input } from "../../src/components/ui/Input";
 import { Modal } from "../../src/components/common/Modal";
+import { ConfirmDialog, DialogType } from "../../src/components/common/ConfirmDialog";
 import { LoadingSpinner } from "../../src/components/common/LoadingSpinner";
 import { APP_CONFIG } from "../../src/constants/app.constants";
 
 export default function DashboardScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const insets = useSafeAreaInsets();
 
   const { summary, isLoading } = useAppSelector((state) => state.dashboard);
   const { admin } = useAppSelector((state) => state.auth);
@@ -37,17 +40,73 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [editProfileModalVisible, setEditProfileModalVisible] = useState(false);
+
+  // Profile Edit State
+  const [ownerName, setOwnerName] = useState(admin?.name || "");
+  const [bizName, setBizName] = useState(admin?.businessName || "");
+  const [bizPhone, setBizPhone] = useState(admin?.phone || "");
+  const [bizAddress, setBizAddress] = useState(admin?.address || "");
+  const [bizUpi, setBizUpi] = useState(admin?.upiId || "");
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+
+  // Password State
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  const loadData = useCallback(() => {
-    dispatch(fetchDashboardSummary());
-  }, [dispatch]);
+  // Custom Confirm Dialog State
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogConfig, setDialogConfig] = useState<{
+    type: DialogType;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    showCancel?: boolean;
+    onConfirm: () => void;
+  }>({
+    type: "info",
+    title: "",
+    message: "",
+    onConfirm: () => setDialogVisible(false),
+  });
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const showDialog = (
+    title: string,
+    message: string,
+    type: DialogType = "info",
+    onConfirm?: () => void,
+    showCancel = false,
+    confirmText = "OK"
+  ) => {
+    setDialogConfig({
+      type,
+      title,
+      message,
+      confirmText,
+      showCancel,
+      onConfirm: () => {
+        setDialogVisible(false);
+        if (onConfirm) onConfirm();
+      },
+    });
+    setDialogVisible(true);
+  };
+
+  // Auto-reload on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(fetchDashboardSummary());
+      if (admin) {
+        setOwnerName(admin.name || "");
+        setBizName(admin.businessName || "");
+        setBizPhone(admin.phone || "");
+        setBizAddress(admin.address || "");
+        setBizUpi(admin.upiId || "");
+      }
+    }, [dispatch, admin])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -58,13 +117,14 @@ export default function DashboardScreen() {
   const handleGenerateTodayDeliveries = async () => {
     const res = await dispatch(generateDailyDeliveries(undefined));
     if (generateDailyDeliveries.fulfilled.match(res)) {
-      Alert.alert(
+      showDialog(
         "Deliveries Generated",
-        `Created ${res.payload.generatedCount} deliveries for active packages (${res.payload.skippedCount} already existed/skipped).`
+        `Created ${res.payload.generatedCount} meal slots for today (${res.payload.skippedCount} already scheduled or skipped).`,
+        "success"
       );
       dispatch(fetchDashboardSummary());
     } else {
-      Alert.alert("Notice", (res.payload as string) || "Failed to generate deliveries");
+      showDialog("Notice", (res.payload as string) || "Failed to generate deliveries", "warning");
     }
   };
 
@@ -74,55 +134,78 @@ export default function DashboardScreen() {
       generateMonthlyBills({ month: now.getMonth() + 1, year: now.getFullYear() })
     );
     if (generateMonthlyBills.fulfilled.match(res)) {
-      Alert.alert(
+      showDialog(
         "Bills Generated",
-        `Generated ${res.payload.billsGenerated} bills (${res.payload.billsUpdated} updated, ${res.payload.billsSkipped} skipped) for ${res.payload.month} ${res.payload.year}.`
+        `Generated ${res.payload.billsGenerated} bills (${res.payload.billsUpdated} updated) for ${res.payload.month} ${res.payload.year}.`,
+        "success"
       );
       dispatch(fetchDashboardSummary());
     } else {
-      Alert.alert("Notice", (res.payload as string) || "Failed to generate monthly bills");
+      showDialog("Notice", (res.payload as string) || "Failed to generate monthly bills", "warning");
     }
   };
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to log out of TMS?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          await dispatch(logoutAdmin());
-          router.replace("/(auth)/login" as any);
-        },
+    showDialog(
+      "Confirm Logout",
+      "Are you sure you want to log out of your Tiffin Management account?",
+      "danger",
+      async () => {
+        await dispatch(logoutAdmin());
+        router.replace("/(auth)/login" as any);
       },
-    ]);
+      true,
+      "Log Out"
+    );
   };
 
   const handleLogoutAll = () => {
-    Alert.alert(
-      "Logout From All Devices",
-      "This will terminate all active admin sessions on all devices.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout Everywhere",
-          style: "destructive",
-          onPress: async () => {
-            await dispatch(logoutAllAdmin());
-            router.replace("/(auth)/login" as any);
-          },
-        },
-      ]
+    showDialog(
+      "Logout Everywhere",
+      "This will immediately terminate all active sessions across all devices.",
+      "danger",
+      async () => {
+        await dispatch(logoutAllAdmin());
+        router.replace("/(auth)/login" as any);
+      },
+      true,
+      "Terminate All"
     );
+  };
+
+  const handleSaveProfile = async () => {
+    if (!ownerName.trim()) {
+      showDialog("Required Field", "Please enter owner name", "warning");
+      return;
+    }
+
+    setIsUpdatingProfile(true);
+    const res = await dispatch(
+      updateAdminProfile({
+        name: ownerName.trim(),
+        businessName: bizName.trim(),
+        phone: bizPhone.trim(),
+        address: bizAddress.trim(),
+        upiId: bizUpi.trim(),
+      })
+    );
+    setIsUpdatingProfile(false);
+
+    if (updateAdminProfile.fulfilled.match(res)) {
+      setEditProfileModalVisible(false);
+      showDialog("Success", "Business profile updated successfully! These details will appear on PDF invoices.", "success");
+    } else {
+      showDialog("Error", (res.payload as string) || "Failed to update profile", "danger");
+    }
   };
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword) {
-      Alert.alert("Error", "Please fill in all password fields");
+      showDialog("Incomplete", "Please fill in all password fields", "warning");
       return;
     }
     if (newPassword.length < 8) {
-      Alert.alert("Error", "New password must be at least 8 characters long");
+      showDialog("Security Notice", "New password must be at least 8 characters long", "warning");
       return;
     }
 
@@ -135,31 +218,27 @@ export default function DashboardScreen() {
     if (changeAdminPassword.fulfilled.match(res)) {
       setPasswordModalVisible(false);
       setProfileModalVisible(false);
-      Alert.alert(
-        "Success",
-        "Password changed successfully. Please log in with your new password.",
-        [
-          {
-            text: "OK",
-            onPress: () => router.replace("/(auth)/login" as any),
-          },
-        ]
+      showDialog(
+        "Password Changed",
+        "Password updated successfully. Please login with your new credentials.",
+        "success",
+        () => router.replace("/(auth)/login" as any)
       );
     } else {
-      Alert.alert("Failed", (res.payload as string) || "Unable to change password");
+      showDialog("Failed", (res.payload as string) || "Unable to change password", "danger");
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView className="flex-1 bg-slate-50" edges={["top", "left", "right"]}>
       {/* Header */}
       <View className="px-5 pt-3 pb-4 bg-white border-b border-slate-100 flex-row items-center justify-between">
-        <View>
+        <View className="flex-1 pr-3">
           <Text className="text-xs font-semibold text-orange-600 uppercase tracking-wider">
-            {summary?.date ? new Date(summary.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Today"}
+            {admin?.businessName || "Tiffin Distribution Services"}
           </Text>
-          <Text className="text-xl font-bold text-slate-900 tracking-tight">
-            Hi, {admin?.name || "Admin"}
+          <Text className="text-xl font-bold text-slate-900 tracking-tight" numberOfLines={1}>
+            {admin?.name ? `Hi, ${admin.name}` : "Dashboard Overview"}
           </Text>
         </View>
 
@@ -177,7 +256,7 @@ export default function DashboardScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#EA580C"]} />
         }
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom }}
       >
         {isLoading && !summary && <LoadingSpinner message="Fetching dashboard..." />}
 
@@ -205,91 +284,73 @@ export default function DashboardScreen() {
 
         {/* Today's Deliveries Section */}
         <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">
-          Today's Deliveries
+          Today's Deliveries Overview
         </Text>
-        <View className="flex-row mb-1">
+        <View className="flex-row gap-3 mb-4">
           <StatCard
-            title="Pending"
-            value={summary?.deliveriesToday.pending ?? 0}
-            icon="time-outline"
-            color="amber"
+            title="Total Today"
+            value={summary?.deliveriesToday.total ?? 0}
+            icon="bicycle"
+            color="orange"
+            className="flex-1"
           />
           <StatCard
             title="Delivered"
             value={summary?.deliveriesToday.delivered ?? 0}
-            icon="checkmark-circle-outline"
-            color="green"
+            icon="checkmark-done"
+            color="emerald"
+            className="flex-1"
           />
         </View>
-        <View className="flex-row mb-4">
+        <View className="flex-row gap-3 mb-5">
           <StatCard
-            title="Skipped"
+            title="Pending Meals"
+            value={summary?.deliveriesToday.pending ?? 0}
+            icon="time"
+            color="amber"
+            className="flex-1"
+          />
+          <StatCard
+            title="Skipped / Off"
             value={summary?.deliveriesToday.skipped ?? 0}
-            icon="play-skip-forward-outline"
-            color="purple"
-          />
-          <StatCard
-            title="Failed"
-            value={summary?.deliveriesToday.failed ?? 0}
-            icon="close-circle-outline"
-            color="rose"
+            icon="close-circle"
+            color="slate"
+            className="flex-1"
           />
         </View>
 
-        {/* Remaining Tiffins Hero Banner */}
-        <Card className="bg-gradient-to-r from-orange-600 to-amber-600 border-0 p-5 mb-4 shadow-md shadow-orange-500/20">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1">
-              <Text className="text-xs font-semibold text-orange-800 uppercase tracking-wider">
-                Active Package Inventory
-              </Text>
-              <Text className="text-3xl font-extrabold text-orange-900 mt-1">
-                {summary?.packages.totalRemainingTiffins ?? 0}
-              </Text>
-              <Text className="text-xs text-orange-800 mt-1">
-                Remaining meals to be delivered across active customers
-              </Text>
-            </View>
-            <View className="w-14 h-14 rounded-2xl bg-white/20 items-center justify-center">
-              <Ionicons name="fast-food-outline" size={32} color="#9A3412" />
-            </View>
-          </View>
-        </Card>
-
-        {/* Meal Packages Breakdown */}
+        {/* Subscription & Customer Metrics */}
         <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">
-          Meal Packages & Customers
+          Active Operations
         </Text>
-        <View className="flex-row mb-4">
-          <StatCard
-            title="Active Packages"
-            value={summary?.packages.active ?? 0}
-            icon="cube-outline"
-            color="orange"
-          />
-          <StatCard
-            title="Paused Packages"
-            value={summary?.packages.paused ?? 0}
-            icon="pause-circle-outline"
-            color="blue"
-          />
+        <View className="flex-row gap-3 mb-5">
           <StatCard
             title="Active Customers"
             value={summary?.customers.active ?? 0}
-            icon="people-outline"
-            color="green"
+            subtitle={`${summary?.customers.total ?? 0} registered`}
+            icon="people"
+            color="indigo"
+            className="flex-1"
+          />
+          <StatCard
+            title="Active Packages"
+            value={summary?.packages.active ?? 0}
+            subtitle={`${summary?.packages.paused ?? 0} paused`}
+            icon="cube"
+            color="orange"
+            className="flex-1"
           />
         </View>
 
-        {/* Monthly Financials */}
+        {/* Financial Highlights */}
         <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-1">
-          Monthly Financials ({summary?.monthlyFinancials.period || "Current Month"})
+          Current Month Financials
         </Text>
-        <Card className="p-4">
+        <Card className="p-4 mb-4">
           <View className="flex-row justify-between items-center py-2 border-b border-slate-100">
             <View className="flex-row items-center">
-              <View className="w-8 h-8 rounded-lg bg-slate-100 items-center justify-center mr-3">
-                <Ionicons name="document-text-outline" size={18} color="#475569" />
+              <View className="w-8 h-8 rounded-lg bg-indigo-100 items-center justify-center mr-3">
+                <Ionicons name="receipt-outline" size={18} color="#4F46E5" />
               </View>
               <Text className="text-sm font-medium text-slate-700">Total Billed</Text>
             </View>
@@ -327,7 +388,7 @@ export default function DashboardScreen() {
         </Card>
       </ScrollView>
 
-      {/* Admin Profile Modal */}
+      {/* Admin Settings Overview Modal */}
       <Modal
         visible={profileModalVisible}
         onClose={() => setProfileModalVisible(false)}
@@ -335,14 +396,29 @@ export default function DashboardScreen() {
         subtitle={admin?.email || "admin@example.com"}
       >
         <View className="py-2">
-          <View className="p-3 bg-slate-50 rounded-xl mb-4">
-            <Text className="text-xs text-slate-500 font-medium">Logged in Administrator</Text>
-            <Text className="text-base font-bold text-slate-900">{admin?.name}</Text>
-            <Text className="text-xs text-slate-600">{admin?.email}</Text>
+          <View className="p-4 bg-orange-50 border border-orange-200 rounded-2xl mb-4">
+            <Text className="text-xs text-orange-600 font-bold uppercase tracking-wider mb-1">
+              {admin?.businessName || "Tiffin Distribution Services"}
+            </Text>
+            <Text className="text-lg font-extrabold text-slate-900">{admin?.name}</Text>
+            <Text className="text-xs text-slate-600 mt-0.5">📞 {admin?.phone || "No phone added"}</Text>
+            <Text className="text-xs text-slate-600">📍 {admin?.address || "No address configured"}</Text>
+            {admin?.upiId ? <Text className="text-xs text-emerald-700 font-semibold mt-1">💳 UPI: {admin.upiId}</Text> : null}
           </View>
 
           <Button
-            title="Change Password"
+            title="Edit Business Profile & Branding"
+            variant="primary"
+            icon={<Ionicons name="create-outline" size={18} color="#FFFFFF" />}
+            onPress={() => {
+              setProfileModalVisible(false);
+              setEditProfileModalVisible(true);
+            }}
+            className="mb-3"
+          />
+
+          <Button
+            title="Change Security Password"
             variant="outline"
             icon={<Ionicons name="key-outline" size={18} color="#334155" />}
             onPress={() => {
@@ -365,6 +441,56 @@ export default function DashboardScreen() {
             variant="danger"
             icon={<Ionicons name="power-outline" size={18} color="#FFFFFF" />}
             onPress={handleLogoutAll}
+          />
+        </View>
+      </Modal>
+
+      {/* Edit Business Profile Modal */}
+      <Modal
+        visible={editProfileModalVisible}
+        onClose={() => setEditProfileModalVisible(false)}
+        title="Edit Business Profile"
+        subtitle="These details will brand the app dashboard and PDF receipts"
+      >
+        <View className="py-2">
+          <Input
+            label="Owner / Manager Name"
+            placeholder="Ex. Rajesh Kumar"
+            value={ownerName}
+            onChangeText={setOwnerName}
+          />
+          <Input
+            label="Tiffin Service Name"
+            placeholder="Ex. Annapurna Tiffin Center"
+            value={bizName}
+            onChangeText={setBizName}
+          />
+          <Input
+            label="Contact Phone"
+            placeholder="Ex. 9876543210"
+            value={bizPhone}
+            onChangeText={setBizPhone}
+            keyboardType="phone-pad"
+          />
+          <Input
+            label="Service / Kitchen Address"
+            placeholder="Ex. Sector 62, Noida"
+            value={bizAddress}
+            onChangeText={setBizAddress}
+          />
+          <Input
+            label="UPI ID for Invoices (Optional)"
+            placeholder="Ex. tiffin@okaxis"
+            value={bizUpi}
+            onChangeText={setBizUpi}
+          />
+
+          <Button
+            title="Save Profile & Branding"
+            onPress={handleSaveProfile}
+            isLoading={isUpdatingProfile}
+            size="lg"
+            className="mt-2"
           />
         </View>
       </Modal>
@@ -400,6 +526,19 @@ export default function DashboardScreen() {
           />
         </View>
       </Modal>
+
+      {/* Custom High-Quality Confirm / Status Dialog */}
+      <ConfirmDialog
+        visible={dialogVisible}
+        type={dialogConfig.type}
+        title={dialogConfig.title}
+        message={dialogConfig.message}
+        confirmText={dialogConfig.confirmText}
+        cancelText={dialogConfig.cancelText}
+        showCancel={dialogConfig.showCancel}
+        onConfirm={dialogConfig.onConfirm}
+        onCancel={() => setDialogVisible(false)}
+      />
     </SafeAreaView>
   );
 }

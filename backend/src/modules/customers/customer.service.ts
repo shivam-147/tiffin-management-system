@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 import customerRepository from "./customer.repository";
+import packageRepository from "../packages/package.repository";
+import subscriptionService from "../subscriptions/subscription.service";
 import {
   CreateCustomerInput,
   UpdateCustomerInput,
@@ -28,13 +30,34 @@ class CustomerService {
       );
     }
 
-    return customerRepository.create({
+    const customer = await customerRepository.create({
       name: data.name,
       phone: data.phone,
       address: data.address,
       email: data.email || undefined,
       notes: data.notes || undefined,
     });
+
+    // If packageCatalogId is provided during registration, automatically initialize the package
+    if (data.packageCatalogId) {
+      const pkg = await packageRepository.findById(data.packageCatalogId);
+      if (pkg && pkg.isActive) {
+        await subscriptionService.createSubscription({
+          customerId: customer._id.toString(),
+          packageCatalogId: pkg._id.toString(),
+          packageName: pkg.name,
+          pricePerTiffin: pkg.pricePerTiffin,
+          totalTiffins: pkg.totalTiffins,
+          advancePaid: Number(data.advanceAmount) || 0,
+          mealsPerDay: pkg.mealsPerDay || 1,
+          mealTypes: pkg.mealTypes || ["LUNCH"],
+          startDate: data.startDate,
+          notes: `Created on registration with initial advance: ₹${data.advanceAmount || 0}`,
+        });
+      }
+    }
+
+    return customer;
   }
 
   async getCustomers(query: CustomerQueryInput) {

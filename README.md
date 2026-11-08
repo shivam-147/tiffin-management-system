@@ -76,7 +76,7 @@ The Tiffin Management System backend automates operational and financial trackin
 ### 1.5 Definitions, Acronyms, and Abbreviations
 - **TMS**: Tiffin Management System.
 - **Tiffin**: A prepared meal packaged for delivery.
-- **Package / Subscription**: A prepaid or committed pool of tiffins (e.g., 60 meals) consumed on delivery.
+- **Package / Subscription**: A prepaid or committed pool of tiffins (Ex., 60 meals) consumed on delivery.
 - **SRS**: Software Requirements Specification.
 - **JWT**: JSON Web Token.
 - **TTL**: Time-To-Live (automated data expiration).
@@ -256,9 +256,9 @@ TMS serves as the core business logic and transactional backend for meal logisti
 
 #### Error Locations
 - `body`: Invalid or missing payload parameters.
-- `params`: Invalid URL path parameters (e.g., malformed ObjectId).
+- `params`: Invalid URL path parameters (Ex., malformed ObjectId).
 - `query`: Invalid search or pagination query parameters.
-- `business`: Domain rule violations (e.g., duplicate active packages, insufficient balance).
+- `business`: Domain rule violations (Ex., duplicate active packages, insufficient balance).
 - `database`: Database unique constraint or persistence conflicts.
 
 ---
