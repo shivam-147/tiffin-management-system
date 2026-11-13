@@ -60,6 +60,7 @@ export const StatusBadge: React.FC<{ status: string; size?: "sm" | "md" }> = ({
       break;
     case "PENDING":
     case "PARTIAL":
+    case "PAYMENT_PENDING":
       variant = "warning";
       break;
     case "PAUSED":
@@ -75,5 +76,6 @@ export const StatusBadge: React.FC<{ status: string; size?: "sm" | "md" }> = ({
       variant = "neutral";
   }
 
-  return <Badge label={status} variant={variant} size={size} />;
+  const displayLabel = status === "PAYMENT_PENDING" ? "PAYMENT DUE" : status;
+  return <Badge label={displayLabel} variant={variant} size={size} />;
 };

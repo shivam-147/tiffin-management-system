@@ -54,6 +54,7 @@ export default function BillingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Payment Form State
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -249,6 +250,26 @@ export default function BillingScreen() {
     }
   };
 
+  const unpaidCount = bills.filter((b) => b.paymentStatus === "UNPAID").length;
+  const partialCount = bills.filter((b) => b.paymentStatus === "PARTIAL").length;
+  const paidCount = bills.filter((b) => b.paymentStatus === "PAID").length;
+
+  const totalBilled = bills.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+  const totalCollected = bills.reduce((sum, b) => sum + (b.paidAmount || 0), 0);
+  const totalPending = bills.reduce((sum, b) => sum + (b.pendingAmount || 0), 0);
+
+  const displayedBills = bills.filter((b) => {
+    if (paymentStatusFilter !== "ALL" && b.paymentStatus !== paymentStatusFilter) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const name = b.customer?.name?.toLowerCase() || "";
+      const phone = b.customer?.phone?.toLowerCase() || "";
+      const billNum = b.billNumber?.toLowerCase() || "";
+      return name.includes(q) || phone.includes(q) || billNum.includes(q);
+    }
+    return true;
+  });
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={["top", "left", "right"]}>
       {/* Top Header */}
@@ -258,7 +279,7 @@ export default function BillingScreen() {
             Monthly Billing
           </Text>
           <Text className="text-xs text-slate-500 font-medium">
-            {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+            {MONTH_NAMES[selectedMonth - 1]} {selectedYear} • {displayedBills.length} invoices
           </Text>
         </View>
 
@@ -271,8 +292,24 @@ export default function BillingScreen() {
         />
       </View>
 
+      {/* Financial Metrics Summary Banner */}
+      <View className="px-4 py-2.5 bg-white border-b border-slate-100 flex-row gap-2">
+        <View className="flex-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+          <Text className="text-[10px] text-slate-400 font-bold uppercase">Billed</Text>
+          <Text className="text-sm font-extrabold text-slate-900 mt-0.5">₹{totalBilled.toLocaleString()}</Text>
+        </View>
+        <View className="flex-1 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100">
+          <Text className="text-[10px] text-emerald-800 font-bold uppercase">Collected</Text>
+          <Text className="text-sm font-extrabold text-emerald-700 mt-0.5">₹{totalCollected.toLocaleString()}</Text>
+        </View>
+        <View className="flex-1 bg-rose-50 p-2.5 rounded-xl border border-rose-100">
+          <Text className="text-[10px] text-rose-800 font-bold uppercase">Pending</Text>
+          <Text className="text-sm font-extrabold text-rose-700 mt-0.5">₹{totalPending.toLocaleString()}</Text>
+        </View>
+      </View>
+
       {/* Month Selector Bar */}
-      <View className="bg-white px-4 py-2.5 border-b border-slate-100 flex-row items-center justify-between">
+      <View className="bg-white px-4 py-2 border-b border-slate-100 flex-row items-center justify-between">
         <TouchableOpacity
           onPress={() => changeMonth(-1)}
           className="p-1.5 rounded-lg bg-slate-100"
@@ -292,18 +329,34 @@ export default function BillingScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Payment Status Filter Tabs */}
+      {/* Search Input */}
+      <View className="px-4 py-2 bg-white border-b border-slate-100">
+        <Input
+          placeholder="Search by customer name, phone, or bill #..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          leftIcon="search-outline"
+          className="py-1.5"
+        />
+      </View>
+
+      {/* Payment Status Filter Tabs with Counts */}
       <View className="py-2 px-4 bg-white border-b border-slate-100">
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={["ALL", "UNPAID", "PARTIAL", "PAID"] as (PaymentStatus | "ALL")[]}
-          keyExtractor={(item) => item}
+          data={[
+            { key: "ALL", label: `ALL (${bills.length})` },
+            { key: "UNPAID", label: `UNPAID (${unpaidCount})` },
+            { key: "PARTIAL", label: `PARTIAL (${partialCount})` },
+            { key: "PAID", label: `PAID (${paidCount})` },
+          ] as { key: PaymentStatus | "ALL"; label: string }[]}
+          keyExtractor={(item) => item.key}
           renderItem={({ item }) => {
-            const isSelected = paymentStatusFilter === item;
+            const isSelected = paymentStatusFilter === item.key;
             return (
               <TouchableOpacity
-                onPress={() => dispatch(setPaymentStatusFilter(item))}
+                onPress={() => dispatch(setPaymentStatusFilter(item.key))}
                 className={`py-1.5 px-3.5 rounded-full mr-2 ${
                   isSelected ? "bg-orange-600" : "bg-slate-100"
                 }`}
@@ -313,7 +366,7 @@ export default function BillingScreen() {
                     isSelected ? "text-white" : "text-slate-600"
                   }`}
                 >
-                  {item}
+                  {item.label}
                 </Text>
               </TouchableOpacity>
             );
@@ -326,7 +379,7 @@ export default function BillingScreen() {
         <LoadingSpinner message="Fetching customer bills..." />
       ) : (
         <FlatList
-          data={bills}
+          data={displayedBills}
           keyExtractor={(item) => item._id}
           contentContainerStyle={{ padding: 16, paddingBottom: 40 + insets.bottom }}
           refreshControl={
@@ -335,8 +388,12 @@ export default function BillingScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="wallet-outline"
-              title="No Bills for this Month"
-              description={`No billing records generated for ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}. Tap 'Generate Bills' to calculate amounts from delivered meals.`}
+              title="No Invoices Found"
+              description={
+                searchQuery
+                  ? `No bills matching "${searchQuery}" found for this month.`
+                  : `No billing records found for ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}. Tap 'Generate Bills' to calculate amounts.`
+              }
               actionTitle="Generate Monthly Bills"
               onActionPress={handleGenerateBills}
             />

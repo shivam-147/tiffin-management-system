@@ -70,7 +70,7 @@ class BillingService {
         subscriptionToUse = await Subscription.findById(group.lastSubscriptionId);
       }
       if (!subscriptionToUse) {
-        subscriptionToUse = await Subscription.findOne({ customer: customerId, status: { $in: ["ACTIVE", "COMPLETED"] } }).sort({ createdAt: -1 });
+        subscriptionToUse = await Subscription.findOne({ customer: customerId, status: { $in: ["ACTIVE", "COMPLETED", "PAYMENT_PENDING"] } }).sort({ createdAt: -1 });
       }
 
       if (subscriptionToUse) {

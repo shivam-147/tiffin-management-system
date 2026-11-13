@@ -250,10 +250,15 @@ class DeliveryService {
         );
       }
 
-      // If package balance has reached 0, mark as COMPLETED
-      if (updatedSub.remainingQuantity === 0) {
-        updatedSub.status = "COMPLETED";
+      // If package balance has reached 0, check if advance covers totalAmount
+      if (updatedSub.remainingQuantity <= 0) {
         updatedSub.completionDate = new Date();
+        const advance = updatedSub.advancePaid || 0;
+        if (advance >= updatedSub.totalAmount) {
+          updatedSub.status = "COMPLETED";
+        } else {
+          updatedSub.status = "PAYMENT_PENDING";
+        }
         await updatedSub.save();
       }
 
@@ -270,8 +275,8 @@ class DeliveryService {
         $inc: { remainingQuantity: qty, deliveredQuantity: -qty },
       };
 
-      // If package was marked COMPLETED, restore it to ACTIVE since balance is restored
-      if (subscription.status === "COMPLETED") {
+      // If package was marked COMPLETED or PAYMENT_PENDING, restore it to ACTIVE since balance is restored
+      if (subscription.status === "COMPLETED" || subscription.status === "PAYMENT_PENDING") {
         updatePayload.status = "ACTIVE";
         updatePayload.completionDate = null;
       }
@@ -346,9 +351,14 @@ class DeliveryService {
       { returnDocument: "after" }
     );
 
-    if (updatedSub && updatedSub.remainingQuantity === 0) {
-      updatedSub.status = "COMPLETED";
+    if (updatedSub && updatedSub.remainingQuantity <= 0) {
       updatedSub.completionDate = new Date();
+      const advance = updatedSub.advancePaid || 0;
+      if (advance >= updatedSub.totalAmount) {
+        updatedSub.status = "COMPLETED";
+      } else {
+        updatedSub.status = "PAYMENT_PENDING";
+      }
       await updatedSub.save();
     }
 

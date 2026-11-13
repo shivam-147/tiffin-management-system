@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export type SubscriptionStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELLED";
+export type SubscriptionStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "PAYMENT_PENDING" | "CANCELLED";
 
 export interface IPauseEntry {
   pausedAt: Date;
@@ -101,7 +101,7 @@ const subscriptionSchema = new Schema<ISubscription>(
     },
     status: {
       type: String,
-      enum: ["ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"],
+      enum: ["ACTIVE", "PAUSED", "COMPLETED", "PAYMENT_PENDING", "CANCELLED"],
       default: "ACTIVE",
       index: true,
     },

@@ -75,7 +75,7 @@ export interface CustomersListPayload {
   pagination: Pagination;
 }
 
-export type SubscriptionStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "CANCELLED";
+export type SubscriptionStatus = "ACTIVE" | "PAUSED" | "COMPLETED" | "PAYMENT_PENDING" | "CANCELLED";
 
 export interface PauseEntry {
   pausedAt: string;

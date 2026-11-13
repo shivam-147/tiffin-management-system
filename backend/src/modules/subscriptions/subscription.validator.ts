@@ -25,7 +25,7 @@ export const resumeSubscriptionSchema = z.object({
 
 export const subscriptionQuerySchema = z.object({
   customerId: objectIdSchema.optional(),
-  status: z.enum(["ACTIVE", "PAUSED", "COMPLETED", "CANCELLED", "ALL"]).optional(),
+  status: z.enum(["ACTIVE", "PAUSED", "COMPLETED", "PAYMENT_PENDING", "CANCELLED", "ALL"]).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(10),
 });
